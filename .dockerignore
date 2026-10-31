@@ -1,0 +1,7 @@
+.git
+.env*
+vendor
+writable/*
+tests
+docs
+README.md

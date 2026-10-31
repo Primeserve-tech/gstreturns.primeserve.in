@@ -1,0 +1,7 @@
+/.env
+/.env.production
+/vendor/
+/writable/*
+!/writable/.gitkeep
+/config/contract.json
+/tests/__pycache__/

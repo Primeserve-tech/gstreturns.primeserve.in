@@ -1,0 +1,110 @@
+{
+  "_instructions": "All null fields must be completed from verified documentation. Dotted paths address JSON fields. No response schemas or period encodings are asserted by this template.",
+  "verified": false,
+  "baseUrl": "https://api.primeserve.in",
+  "otp": {
+    "method": "POST",
+    "path": "/api/spark/core/gst/auth/requestotp",
+    "successPath": null,
+    "successValue": null
+  },
+  "connect": {
+    "method": "POST",
+    "path": "/api/spark/core/gst/auth/connect",
+    "successPath": null,
+    "successValue": null,
+    "sessionHeaders": {}
+  },
+  "returns": {
+    "GSTR-1": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr1",
+      "periodFormat": null,
+      "periodKind": null,
+      "jobIdPath": null,
+      "successPath": null,
+      "successValue": null
+    },
+    "GSTR-1A": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr1a",
+      "periodFormat": null,
+      "periodKind": null,
+      "jobIdPath": null,
+      "successPath": null,
+      "successValue": null
+    },
+    "GSTR-2A": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr2a",
+      "periodFormat": null,
+      "periodKind": null,
+      "jobIdPath": null,
+      "successPath": null,
+      "successValue": null
+    },
+    "GSTR-2B": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr2b",
+      "periodFormat": null,
+      "periodKind": null,
+      "jobIdPath": null,
+      "successPath": null,
+      "successValue": null
+    },
+    "GSTR-3B": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr3b",
+      "periodFormat": null,
+      "periodKind": null,
+      "jobIdPath": null,
+      "successPath": null,
+      "successValue": null
+    },
+    "GSTR-6": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr6",
+      "periodFormat": null,
+      "periodKind": null,
+      "jobIdPath": null,
+      "successPath": null,
+      "successValue": null
+    },
+    "GSTR-6A": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr6a",
+      "periodFormat": null,
+      "periodKind": null,
+      "jobIdPath": null,
+      "successPath": null,
+      "successValue": null
+    },
+    "GSTR-9": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr9",
+      "periodFormat": null,
+      "periodKind": null,
+      "jobIdPath": null,
+      "successPath": null,
+      "successValue": null
+    }
+  },
+  "status": {
+    "method": "GET",
+    "path": "/api/spark/system/jobstatus",
+    "statusPath": null,
+    "pendingValues": [],
+    "completedValues": [],
+    "failedValues": [],
+    "emptyValues": []
+  },
+  "download": {
+    "method": null,
+    "path": null,
+    "jobIdParameter": null,
+    "responseKind": null,
+    "urlPath": null,
+    "allowedHosts": []
+  },
+  "allowInitiationRetry": false
+}

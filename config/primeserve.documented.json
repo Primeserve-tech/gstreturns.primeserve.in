@@ -1,0 +1,111 @@
+{
+  "verified": true,
+  "baseUrl": "https://api.primeserve.in",
+  "otp": {
+    "method": "POST",
+    "path": "/api/spark/core/gst/auth/requestotp",
+    "successPath": "status_cd",
+    "successValue": "1"
+  },
+  "connect": {
+    "method": "POST",
+    "path": "/api/spark/core/gst/auth/connect",
+    "successPath": "status_cd",
+    "successValue": "1",
+    "sessionHeaders": {}
+  },
+  "returns": {
+    "GSTR-1": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr1",
+      "periodFormat": "MMYYYY",
+      "periodKind": "month",
+      "jobIdPath": "jobId"
+    },
+    "GSTR-1A": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr1a",
+      "periodFormat": "MMYYYY",
+      "periodKind": "month",
+      "jobIdPath": "jobId"
+    },
+    "GSTR-2A": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr2a",
+      "periodFormat": "MMYYYY",
+      "periodKind": "month",
+      "jobIdPath": "jobId"
+    },
+    "GSTR-2B": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr2b",
+      "periodFormat": "MMYYYY",
+      "periodKind": "month",
+      "jobIdPath": "jobId"
+    },
+    "GSTR-3B": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr3b",
+      "periodFormat": "MMYYYY",
+      "periodKind": "month",
+      "jobIdPath": "jobId"
+    },
+    "GSTR-6": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr6",
+      "periodFormat": "MMYYYY",
+      "periodKind": "month",
+      "jobIdPath": "jobId"
+    },
+    "GSTR-6A": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr6a",
+      "periodFormat": "MMYYYY",
+      "periodKind": "month",
+      "jobIdPath": "jobId"
+    },
+    "GSTR-9": {
+      "method": "GET",
+      "path": "/api/spark/prime/gst/gstr9",
+      "periodFormat": "MMYYYY",
+      "periodKind": "month",
+      "jobIdPath": "jobId"
+    }
+  },
+  "status": {
+    "method": "GET",
+    "path": "/api/spark/system/jobstatus",
+    "statusPath": "jobStatus",
+    "pendingValues": [],
+    "completedValues": [
+      100
+    ],
+    "failedValues": [],
+    "emptyValues": []
+  },
+  "download": {
+    "method": "GET",
+    "path": "/api/spark/system/jobstatus",
+    "jobIdParameter": "jobid",
+    "responseKind": "jobStatusUrl",
+    "urlPath": "url",
+    "allowedHosts": [
+      "gst-cache.s3.ap-south-1.amazonaws.com",
+      "octa-gst-cache.s3.ap-south-1.amazonaws.com"
+    ]
+  },
+  "allowInitiationRetry": false,
+  "_source": {
+    "authentication": "https://app.primeserve.in/apis/group/ef4c3799-c38c-474e-9ef2-e99c6a9f08ff/a0dbc138-7580-44c2-9ee5-e8b39ad316ce",
+    "returns": "https://app.primeserve.in/apis/group/bc021aef-45f4-480a-bdc6-f0dc3b60bcc4/1873f18d-85ab-4812-813d-17725c59db8e",
+    "notes": "Read authenticated documentation. Only completed jobStatus=100 is documented. Unknown statuses use bounded monitoring errors, never invented terminal mappings. Unspecified month encodings require explicit user entry.",
+    "periodNotes": "Six-digit monthly MMYYYY periods are generated from one shared selection. The provided status example uses a six-digit GSTR-1 period, explicit GSTR-6/6A/9 requests document MMYYYY, and local user-initiated 042026 requests received job IDs while 0426 requests were rejected.",
+    "downloadHostNotes": "The documented sample uses gst-cache.s3.ap-south-1.amazonaws.com. An authenticated status response for an existing user-completed job on 2026-10-31 returned octa-gst-cache.s3.ap-south-1.amazonaws.com; both exact hosts are allowed. Signed object paths/query strings are not logged."
+  },
+  "disconnect": {
+    "method": "POST",
+    "path": "/api/spark/core/gst/auth/disconnect",
+    "successPath": "status_cd",
+    "successValue": "1"
+  }
+}
