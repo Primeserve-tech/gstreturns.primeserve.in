@@ -1,0 +1,87 @@
+# Coolify Git deployment; secrets are supplied as runtime environment variables.
+services:
+  web:
+    build: .
+    image: primeserve-gst-returns:production
+    restart: unless-stopped
+    init: true
+    volumes:
+      - returns-data:/var/www/html/writable
+      - returns-temp:/run/returns-temp
+    environment:
+      CI_ENVIRONMENT: production
+      GST_MODE: live
+      GST_ENCRYPTION_KEY: ${GST_ENCRYPTION_KEY:?Configure GST_ENCRYPTION_KEY}
+      GST_ADMIN_USERNAME: ${GST_ADMIN_USERNAME:?Configure GST_ADMIN_USERNAME}
+      GST_ADMIN_PASSWORD_HASH: ${GST_ADMIN_PASSWORD_HASH:?Configure GST_ADMIN_PASSWORD_HASH}
+      GST_TRUSTED_PROXIES: ${GST_TRUSTED_PROXIES:-}
+      GST_AUDIT_RETENTION_DAYS: ${GST_AUDIT_RETENTION_DAYS:-30}
+      GST_POLL_SECONDS: ${GST_POLL_SECONDS:-10}
+      GST_JOB_TIMEOUT_SECONDS: ${GST_JOB_TIMEOUT_SECONDS:-540}
+      GST_POLL_MAX_ERRORS: ${GST_POLL_MAX_ERRORS:-4}
+      app.baseURL: https://gstreturns.primeserve.in/
+      app.forceGlobalSecureRequests: "true"
+      cookie.secure: "true"
+      GST_TEMP_DIR: /run/returns-temp
+  worker:
+    image: primeserve-gst-returns:production
+    build: .
+    restart: unless-stopped
+    init: true
+    command: ["runuser", "-u", "www-data", "--", "php", "spark", "returns:process-v3"]
+    volumes:
+      - returns-data:/var/www/html/writable
+      - returns-temp:/run/returns-temp
+    environment:
+      CI_ENVIRONMENT: production
+      GST_MODE: live
+      GST_ENCRYPTION_KEY: ${GST_ENCRYPTION_KEY:?Configure GST_ENCRYPTION_KEY}
+      GST_ADMIN_USERNAME: ${GST_ADMIN_USERNAME:?Configure GST_ADMIN_USERNAME}
+      GST_ADMIN_PASSWORD_HASH: ${GST_ADMIN_PASSWORD_HASH:?Configure GST_ADMIN_PASSWORD_HASH}
+      GST_TRUSTED_PROXIES: ${GST_TRUSTED_PROXIES:-}
+      GST_AUDIT_RETENTION_DAYS: ${GST_AUDIT_RETENTION_DAYS:-30}
+      GST_POLL_SECONDS: ${GST_POLL_SECONDS:-10}
+      GST_JOB_TIMEOUT_SECONDS: ${GST_JOB_TIMEOUT_SECONDS:-540}
+      GST_POLL_MAX_ERRORS: ${GST_POLL_MAX_ERRORS:-4}
+      GST_TEMP_DIR: /run/returns-temp
+    healthcheck:
+      test: ["CMD", "php", "docker/worker-health.php"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+  janitor:
+    image: primeserve-gst-returns:production
+    build: .
+    restart: unless-stopped
+    init: true
+    command: ["runuser", "-u", "www-data", "--", "php", "spark", "returns:purge-v3"]
+    environment:
+      CI_ENVIRONMENT: production
+      GST_MODE: live
+      GST_ENCRYPTION_KEY: ${GST_ENCRYPTION_KEY:?Configure GST_ENCRYPTION_KEY}
+      GST_ADMIN_USERNAME: ${GST_ADMIN_USERNAME:?Configure GST_ADMIN_USERNAME}
+      GST_ADMIN_PASSWORD_HASH: ${GST_ADMIN_PASSWORD_HASH:?Configure GST_ADMIN_PASSWORD_HASH}
+      GST_TRUSTED_PROXIES: ${GST_TRUSTED_PROXIES:-}
+      GST_AUDIT_RETENTION_DAYS: ${GST_AUDIT_RETENTION_DAYS:-30}
+      GST_POLL_SECONDS: ${GST_POLL_SECONDS:-10}
+      GST_JOB_TIMEOUT_SECONDS: ${GST_JOB_TIMEOUT_SECONDS:-540}
+      GST_POLL_MAX_ERRORS: ${GST_POLL_MAX_ERRORS:-4}
+      GST_TEMP_DIR: /run/returns-temp
+    volumes:
+      - returns-data:/var/www/html/writable
+      - returns-temp:/run/returns-temp
+    healthcheck:
+      test: ["CMD", "php", "docker/janitor-health.php"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+volumes:
+  returns-data:
+  returns-temp:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=256m,uid=33,gid=33,mode=0700
