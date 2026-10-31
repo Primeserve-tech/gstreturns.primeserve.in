@@ -11,9 +11,9 @@ services:
       - returns-temp:/run/returns-temp
     environment:
       CI_ENVIRONMENT: production
-      app.baseURL: https://gstreturns.primeserve.in/
-      app.forceGlobalSecureRequests: "true"
-      cookie.secure: "true"
+      app_baseURL: https://gstreturns.primeserve.in/
+      app_forceGlobalSecureRequests: "true"
+      cookie_secure: "true"
       GST_TEMP_DIR: /run/returns-temp
   worker:
     image: primeserve-gst-returns:production
