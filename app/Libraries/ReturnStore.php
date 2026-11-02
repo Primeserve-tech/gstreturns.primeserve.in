@@ -72,6 +72,19 @@ final class ReturnStore
         return $row;
     }
 
+    public function credentials(string $owner,array $row):array
+    {
+        $data=$this->open($row['secret']);
+        if(CustomerAccounts::enabled())$data['apiKey']=(new CustomerAccounts($this))->key($owner);
+        return $data;
+    }
+
+    public function sealCredentials(array $data):string
+    {
+        if(CustomerAccounts::enabled())unset($data['apiKey']);
+        return $this->seal($data);
+    }
+
     public function jobs(string $owner): array
     {
         $this->cleanup();
@@ -107,12 +120,18 @@ final class ReturnStore
         $this->query('DELETE FROM connections WHERE expires<=?', [time()]);
         $this->query('DELETE FROM api_audit WHERE expires<=?', [time()]);
         $this->query('DELETE FROM rate_limits WHERE started<=?', [time()-self::RETENTION_SECONDS]);
+        if(CustomerAccounts::enabled()&&$this->query("SELECT name FROM sqlite_master WHERE type='table' AND name='customer_sessions'")->fetchColumn()){
+            $this->query('DELETE FROM customer_sessions WHERE expires<=?',[time()]);
+            $this->query("UPDATE registration_attempts SET payload='',verifier='',used=1 WHERE expires<=? AND used=0",[time()]);
+            $this->query('DELETE FROM registration_attempts WHERE expires<?',[time()-3600]);
+            $this->query('DELETE FROM password_resets WHERE expires<=? OR used=1',[time()]);
+        }
         foreach (glob($this->tempDir().'/ttl-*') ?: [] as $file) {
             if (preg_match('/^ttl-(\d+)-[a-f0-9]+\.zip(?:\.xml)?$/',basename($file),$match) && (int)$match[1]<=time()) @unlink($file);
         }
         // PHP session files contain only opaque IDs/CSRF/admin flags, never GST details or keys.
         foreach (glob(WRITEPATH.'session/ps_returns_session*') ?: [] as $file) {
-            if (is_file($file) && filemtime($file)<=time()-self::RETENTION_SECONDS) @unlink($file);
+            if (is_file($file) && filemtime($file)<=time()-(CustomerAccounts::enabled()?28800:self::RETENTION_SECONDS)) @unlink($file);
         }
     }
 
@@ -182,7 +201,7 @@ final class ReturnStore
     public function auditStart(string $owner,string $ip,string $operation,?string $type,string $method,string $path,?string $apiKey=null): string
     {
         $expires=time()+max(1,min(365,(int)env('GST_AUDIT_RETENTION_DAYS',30)))*86400;$id=bin2hex(random_bytes(16));
-        $ref=$apiKey!==null?$this->registerApiKey($apiKey):null;
+        $ref=$apiKey!==null&&!CustomerAccounts::enabled()?$this->registerApiKey($apiKey):null;
         $this->query('INSERT INTO api_audit(id,owner,client_ip,operation,return_type,method,path,mode,started,outcome,expires,api_key_ref) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',[$id,$owner,$ip,$operation,$type,$method,$path,(string)env('GST_MODE','disabled'),time(),'in_progress',$expires,$ref]);
         return $id;
     }
@@ -215,6 +234,7 @@ final class ReturnStore
 
     public function rememberConnectionKey(string $owner,string $apiKey,int $since): void
     {
+        if(CustomerAccounts::enabled())return; // Customer keys must never enter retained audit-key records.
         $ref=$this->registerApiKey($apiKey);
         $this->query('INSERT INTO audit_key_owners(owner,api_key_ref,valid_from) VALUES(?,?,?) ON CONFLICT(owner) DO UPDATE SET api_key_ref=excluded.api_key_ref,valid_from=excluded.valid_from',[$owner,$ref,$since]);
         $this->query('UPDATE api_audit SET api_key_ref=? WHERE owner=? AND api_key_ref IS NULL AND started>=?',[$ref,$owner,$since]);

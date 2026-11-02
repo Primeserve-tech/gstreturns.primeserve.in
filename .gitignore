@@ -5,3 +5,9 @@
 !/writable/.gitkeep
 /config/contract.json
 /tests/__pycache__/
+
+# Local review screenshots can contain customer or configuration details.
+/docs/screenshots/
+/.env.*
+!/.env.example
+!/.env.customers.example

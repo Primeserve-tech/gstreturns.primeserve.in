@@ -11,6 +11,9 @@ services:
     environment:
       CI_ENVIRONMENT: production
       GST_MODE: live
+      GST_CUSTOMERS_ENABLED: ${GST_CUSTOMERS_ENABLED:-1}
+      GST_BILLING_VERIFIED: ${GST_BILLING_VERIFIED:-0}
+      GST_PUBLIC_URL: ${GST_PUBLIC_URL:-https://gstreturns.primeserve.in}
       GST_ENCRYPTION_KEY: ${GST_ENCRYPTION_KEY:?Configure GST_ENCRYPTION_KEY}
       GST_ADMIN_USERNAME: ${GST_ADMIN_USERNAME:?Configure GST_ADMIN_USERNAME}
       GST_ADMIN_PASSWORD_HASH: ${GST_ADMIN_PASSWORD_HASH:?Configure GST_ADMIN_PASSWORD_HASH}
@@ -19,6 +22,10 @@ services:
       GST_POLL_SECONDS: ${GST_POLL_SECONDS:-10}
       GST_JOB_TIMEOUT_SECONDS: ${GST_JOB_TIMEOUT_SECONDS:-540}
       GST_POLL_MAX_ERRORS: ${GST_POLL_MAX_ERRORS:-4}
+      ZOHO_CPAAS_HOST: https://cpaas.zoho.in
+      ZOHO_CPAAS_AGENT_ALIAS: ${ZOHO_CPAAS_AGENT_ALIAS:-}
+      ZOHO_CPAAS_API_KEY: ${ZOHO_CPAAS_API_KEY:-}
+      ZOHO_CPAAS_FROM: ${ZOHO_CPAAS_FROM:-}
       app_baseURL: https://gstreturns.primeserve.in/
       app_forceGlobalSecureRequests: "true"
       cookie_secure: "true"
@@ -35,6 +42,9 @@ services:
     environment:
       CI_ENVIRONMENT: production
       GST_MODE: live
+      GST_CUSTOMERS_ENABLED: ${GST_CUSTOMERS_ENABLED:-1}
+      GST_BILLING_VERIFIED: ${GST_BILLING_VERIFIED:-0}
+      GST_PUBLIC_URL: ${GST_PUBLIC_URL:-https://gstreturns.primeserve.in}
       GST_ENCRYPTION_KEY: ${GST_ENCRYPTION_KEY:?Configure GST_ENCRYPTION_KEY}
       GST_ADMIN_USERNAME: ${GST_ADMIN_USERNAME:?Configure GST_ADMIN_USERNAME}
       GST_ADMIN_PASSWORD_HASH: ${GST_ADMIN_PASSWORD_HASH:?Configure GST_ADMIN_PASSWORD_HASH}
@@ -43,6 +53,11 @@ services:
       GST_POLL_SECONDS: ${GST_POLL_SECONDS:-10}
       GST_JOB_TIMEOUT_SECONDS: ${GST_JOB_TIMEOUT_SECONDS:-540}
       GST_POLL_MAX_ERRORS: ${GST_POLL_MAX_ERRORS:-4}
+      ZOHO_CPAAS_HOST: https://cpaas.zoho.in
+      ZOHO_CPAAS_AGENT_ALIAS: ${ZOHO_CPAAS_AGENT_ALIAS:-}
+      ZOHO_CPAAS_API_KEY: ${ZOHO_CPAAS_API_KEY:-}
+      ZOHO_CPAAS_FROM: ${ZOHO_CPAAS_FROM:-}
+      GST_LOW_BALANCE_PAISE: ${GST_LOW_BALANCE_PAISE:-1000}
       GST_TEMP_DIR: /run/returns-temp
     healthcheck:
       test: ["CMD", "php", "docker/worker-health.php"]
@@ -59,6 +74,9 @@ services:
     environment:
       CI_ENVIRONMENT: production
       GST_MODE: live
+      GST_CUSTOMERS_ENABLED: ${GST_CUSTOMERS_ENABLED:-1}
+      GST_BILLING_VERIFIED: ${GST_BILLING_VERIFIED:-0}
+      GST_PUBLIC_URL: ${GST_PUBLIC_URL:-https://gstreturns.primeserve.in}
       GST_ENCRYPTION_KEY: ${GST_ENCRYPTION_KEY:?Configure GST_ENCRYPTION_KEY}
       GST_ADMIN_USERNAME: ${GST_ADMIN_USERNAME:?Configure GST_ADMIN_USERNAME}
       GST_ADMIN_PASSWORD_HASH: ${GST_ADMIN_PASSWORD_HASH:?Configure GST_ADMIN_PASSWORD_HASH}

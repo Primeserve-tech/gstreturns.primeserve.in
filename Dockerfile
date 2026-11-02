@@ -1,7 +1,7 @@
 FROM php:8.3-apache
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
-RUN apt-get update && apt-get install -y --no-install-recommends curl libcurl4-openssl-dev libicu-dev libonig-dev libsodium-dev libsqlite3-dev libzip-dev unzip \
-    && docker-php-ext-install -j"$(nproc)" curl intl mbstring pdo_sqlite sodium zip \
+RUN apt-get update && apt-get install -y --no-install-recommends curl libcurl4-openssl-dev libicu-dev libonig-dev libsodium-dev libsqlite3-dev libzip-dev libxml2-dev unzip \
+    && docker-php-ext-install -j"$(nproc)" curl intl mbstring pdo_sqlite sodium zip xmlwriter dom \
     && a2enmod rewrite headers \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

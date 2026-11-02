@@ -1,0 +1,55 @@
+.customer-workspace{max-width:1150px;margin:auto}.customer-workspace>.portal-card{padding:32px}.account-links{display:flex;gap:24px;flex-wrap:wrap;margin:20px 0}.customer-workspace form{margin:24px 0}.customer-workspace .field{margin-bottom:18px}.customer-workspace h2{margin-top:32px}.customer-workspace .metrics{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}.customer-workspace table{min-width:650px}#accountNotice{white-space:pre-line;color:#164ba0}#accountNotice.error{color:#a13622}.billing-confirm{max-width:540px;border:0;border-radius:18px;padding:30px;color:#142853}.billing-confirm::backdrop{background:#091e49a8}.billing-confirm button{margin:10px 10px 0 0}
+.customer-workspace~.brand-footer{margin-top:auto}
+body[data-screen]{display:flex;flex-direction:column;min-height:100dvh}
+body[data-screen]>.brand-header{flex-shrink:0}
+body[data-screen]:not([data-screen="account"]) .customer-workspace{width:min(460px,calc(100% - 32px));max-width:460px;flex:1;display:flex;align-items:center;padding:20px 0;margin:0 auto}
+body[data-screen="register"]:not([data-screen="account"]) .customer-workspace{width:min(740px,calc(100% - 32px));max-width:740px}
+body[data-screen]:not([data-screen="account"]) .customer-workspace>.portal-card{width:100%;padding:26px 30px;border-radius:16px;margin:0}
+body[data-screen]:not([data-screen="account"]) .customer-workspace h1{font-size:26px;line-height:1.2;margin:8px 0 20px;letter-spacing:-.5px}
+body[data-screen]:not([data-screen="account"]) .customer-workspace form{margin:0}
+body[data-screen]:not([data-screen="account"]) .customer-workspace .field{margin:0 0 16px}
+body[data-screen]:not([data-screen="account"]) .customer-workspace input{min-height:44px;padding:10px 12px}
+body[data-screen]:not([data-screen="account"]) .customer-workspace .primary-action{min-height:42px;padding:10px 22px}
+body[data-screen] #accountNotice:empty{display:none}
+body[data-screen] #accountNotice:not(:empty){margin:0 0 16px}
+.login-actions{display:flex;align-items:center;justify-content:space-between;gap:16px;font-size:13px}
+.auth-switch{text-align:center;font-size:13px;color:#63738c;margin-top:20px}
+.auth-switch a{color:var(--ps-blue);font-weight:600}
+body[data-screen="register"] #registerForm{gap:0 20px}
+body[data-screen="register"] #verifyForm:not([hidden]){margin-top:22px}
+body[data-screen]:not([data-screen="account"])>.brand-header,.customer-workspace:not(:has(#accountSummary))~.brand-footer{flex-shrink:0}
+@media(min-width:761px){body[data-screen]:not([data-screen="account"]) .brand-header,body[data-screen]:not([data-screen="account"]) .header-inner{min-height:82px}body[data-screen]:not([data-screen="account"]) .header-inner .brand-logo-image{width:270px}body[data-screen]:not([data-screen="account"]) .matched-footer{padding:12px 0}}
+@media(max-width:600px){body[data-screen]:not([data-screen="account"]) .customer-workspace>.portal-card{padding:22px}body[data-screen]:not([data-screen="account"]) .customer-workspace h1{font-size:24px}body[data-screen]:not([data-screen="account"]) .customer-workspace{padding:16px 0}.login-actions{gap:10px}.auth-switch{font-size:12px}}
+body[data-screen="register"]:not([data-screen="account"]) .customer-workspace .field{margin-bottom:12px}
+.document-center-heading{margin-left:auto;border-left:3px solid #3688ff;padding-left:18px;display:flex;flex-direction:column;gap:2px;text-align:right;color:#fff}
+.document-center-heading strong{font-size:18px;line-height:1.3;font-weight:700}
+.document-center-heading span{font-size:12px;line-height:1.5;color:#dce9ff}
+.document-center-heading small{font-size:11px;line-height:1.5;color:#88bcff}
+.registration-success-dialog{width:min(440px,calc(100% - 32px));border:1px solid #cfdfef;border-top:4px solid #21866a;border-radius:16px;padding:32px;text-align:center;color:var(--ps-text);box-shadow:0 24px 80px #061b4633}
+.registration-success-dialog::backdrop{background:#061b4677}
+.registration-success-close{position:absolute;right:12px;top:10px;border:0;background:transparent;color:#6a7b95;font-size:26px;line-height:1;padding:6px}
+.registration-success-icon{width:56px;height:56px;display:grid;place-items:center;border-radius:50%;margin:0 auto 18px;background:#e8f6ef;color:#21866a;font-size:30px}
+.registration-success-dialog h2{font-size:24px;margin:0 0 12px}
+.registration-success-dialog p{font-size:14px;line-height:1.7;color:#596d8d;margin:0 0 24px}
+.customer-nav{background:#fff;border-bottom:1px solid var(--ps-border)}
+.customer-nav-inner{display:flex;align-items:center;gap:28px;min-height:52px;font-size:14px;color:#536b8f}
+.customer-nav a[aria-current="page"]{color:var(--ps-blue);font-weight:700}
+.customer-nav-profile{margin-left:auto;display:flex;align-items:center;gap:12px}
+.customer-nav button{border:0;padding:8px 0;background:transparent;color:inherit;font:inherit}
+.customer-nav a:hover,.customer-nav button:hover{color:var(--ps-blue)}
+.account-billing-mode{color:#577397;font-weight:600;margin:10px 0 20px}
+.account-section{border-top:1px solid var(--ps-border);padding-top:8px;margin-top:28px;scroll-margin-top:24px}
+.account-section p{margin:12px 0;color:var(--ps-muted)}
+.upi-payment-panel{display:grid;grid-template-columns:240px 1fr;gap:24px;align-items:center;padding:20px;border:1px solid var(--ps-border);border-radius:12px;background:#f7faff;margin:16px 0}
+.upi-payment-panel img{display:block;width:240px;height:240px;max-width:100%;background:#fff;border:1px solid #dce5f2;border-radius:8px}
+.upi-payment-panel small{color:#647590;display:block;line-height:1.6}
+@media(max-width:650px){.upi-payment-panel{grid-template-columns:1fr;padding:16px;gap:16px}.upi-payment-panel img{margin:auto}}
+.account-profile{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0 28px}
+.account-profile dt{font-size:12px;color:#6b7c96;margin-bottom:5px}.account-profile dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+.customer-workspace .metric strong{font-size:clamp(24px,3vw,36px);overflow-wrap:anywhere}
+@media(max-width:600px){.customer-nav-inner{gap:16px;font-size:12px;min-height:48px}.customer-nav-profile{gap:7px}.account-profile{grid-template-columns:1fr}.customer-workspace>.portal-card{padding:22px}}
+@media(max-width:600px){.document-center-header .header-inner{gap:12px}.document-center-header .brand-logo-image{width:130px}.document-center-heading{padding-left:10px;gap:3px;max-width:190px}.document-center-heading strong{font-size:13px}.document-center-heading span,.document-center-heading small{font-size:9px}}
+
+.header-balance-link{color:#ffc14c;font-size:14px;text-decoration:underline}.header-proof #headerBalanceValue{font-size:26px;font-weight:700;color:white}
+
+@media(max-width:760px){.header-proof.header-account-balance{display:flex;gap:0;text-align:right}.header-account-balance .proof-icon{display:none}.header-account-balance .proof-title{font-size:11px}.header-proof.header-account-balance #headerBalanceValue{font-size:20px}.header-account-balance .header-balance-link{font-size:10px}.header-inner:has(.header-account-balance){gap:12px}.header-inner:has(.header-account-balance) .brand-logo-image{width:170px;max-width:45vw}}

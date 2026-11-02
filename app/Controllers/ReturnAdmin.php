@@ -8,11 +8,11 @@ use Throwable;
 
 class ReturnAdmin extends BaseController
 {
-    private function headers(): void
+    protected function headers(): void
     {
         $this->response->setHeader('Cache-Control','no-store, private')->setHeader('X-Frame-Options','DENY')->setHeader('X-Content-Type-Options','nosniff')->setHeader('Referrer-Policy','no-referrer');
     }
-    private function token(): string
+    protected function token(): string
     {
         if (!session()->has('admin_csrf')) session()->set('admin_csrf',bin2hex(random_bytes(32)));
         return session()->get('admin_csrf');
@@ -24,7 +24,7 @@ class ReturnAdmin extends BaseController
         return ['username'=>(string)env('GST_ADMIN_USERNAME',''),'hash'=>(string)env('GST_ADMIN_PASSWORD_HASH','')];
     }
     private function fingerprint(array $credentials): string { return hash('sha256',$credentials['username']."\0".$credentials['hash']); }
-    private function authenticated(): bool
+    protected function authenticated(): bool
     {
         return (int)session()->get('admin_until')>time() && hash_equals($this->fingerprint($this->credentials()),(string)session()->get('admin_fingerprint'));
     }
@@ -52,6 +52,11 @@ class ReturnAdmin extends BaseController
     public function reports()
     {
         $this->headers();if (!$this->authenticated()) return redirect()->to('/admin');
+        return view('customer_admin',['csrf'=>$this->token()]);
+    }
+    public function activity()
+    {
+        $this->headers();if (!$this->authenticated()) return redirect()->to('/admin');
         return view('return_admin',['csrf'=>$this->token(),'authenticated'=>true,'error'=>null]);
     }
     public function data()
@@ -61,7 +66,7 @@ class ReturnAdmin extends BaseController
             $ip=trim((string)$this->request->getGet('ip'));$outcome=trim((string)$this->request->getGet('outcome'));
             if ($ip!=='' && !filter_var($ip,FILTER_VALIDATE_IP)) throw new \RuntimeException('Enter an exact IPv4 or IPv6 address.');
             if (!in_array($outcome,['','success','failed','processing','completed','empty','in_progress'],true)) throw new \RuntimeException('Invalid outcome filter.');
-            $store=new ReturnStore();$rows=$store->auditRows($ip,$outcome);$gateway=new ReturnGateway();
+            $store=new ReturnStore();$rows=$store->auditRows($ip,$outcome);if(\App\Libraries\CustomerAccounts::enabled())foreach($rows as &$row){$row['api_key_available']=0;}unset($row);$gateway=new ReturnGateway();
             return $this->response->setJSON(['rows'=>$rows,'retentionDays'=>max(1,min(365,(int)env('GST_AUDIT_RETENTION_DAYS',30))),'dataRetentionSeconds'=>ReturnStore::RETENTION_SECONDS,'mode'=>(string)env('GST_MODE','disabled'),'apiReady'=>$gateway->ready(),'serverTime'=>time(),'adminExpiresAt'=>(int)session()->get('admin_until')]);
         } catch (Throwable $e) { return $this->response->setStatusCode(422)->setJSON(['error'=>$e instanceof \RuntimeException?$e->getMessage():'Unable to load audit records.']); }
     }
@@ -71,7 +76,7 @@ class ReturnAdmin extends BaseController
         session()->remove(['admin_until','admin_csrf','admin_fingerprint']);session()->regenerate(true);return redirect()->to('/admin');
     }
 
-    private function adminPost(): void
+    protected function adminPost(): void
     {
         if (!$this->authenticated()) throw new \RuntimeException('Admin session expired. Sign in again.');
         if (!hash_equals($this->token(),$this->request->getHeaderLine('X-CSRF-Token'))) throw new \RuntimeException('Your admin session changed. Refresh and try again.');
@@ -80,7 +85,7 @@ class ReturnAdmin extends BaseController
     public function revealKey(string $id)
     {
         $this->headers();if(!$this->authenticated())return $this->response->setStatusCode(401)->setJSON(['error'=>'Admin sign-in required.']);
-        try {$this->adminPost();$key=(new ReturnStore())->revealAuditKey($id);if($key===null)throw new \RuntimeException('The API key was not captured for this historical record.');return $this->response->setJSON(['apiKey'=>$key]);}
+        try {$this->adminPost();if(\App\Libraries\CustomerAccounts::enabled())throw new \RuntimeException('Full API keys are never displayed in customer mode.');$key=(new ReturnStore())->revealAuditKey($id);if($key===null)throw new \RuntimeException('The API key was not captured for this historical record.');return $this->response->setJSON(['apiKey'=>$key]);}
         catch(Throwable $e){return $this->response->setStatusCode(422)->setJSON(['error'=>$e instanceof \RuntimeException?$e->getMessage():'Unable to show the API key.']);}
     }
 
@@ -90,7 +95,7 @@ class ReturnAdmin extends BaseController
         try {
             $this->adminPost();$data=$this->request->getJSON(true)??[];$ip=trim((string)($data['ip']??''));$outcome=(string)($data['outcome']??'');
             if(($ip!==''&&!filter_var($ip,FILTER_VALIDATE_IP))||!in_array($outcome,['','success','failed','processing','completed','empty','in_progress'],true))throw new \RuntimeException('Choose valid export filters.');
-            $bytes=(new AuditExcel())->build(new ReturnStore(),$ip,$outcome,($data['includeKeys']??false)===true);
+            $bytes=(new AuditExcel())->build(new ReturnStore(),$ip,$outcome,!\App\Libraries\CustomerAccounts::enabled()&&($data['includeKeys']??false)===true);
             $stamp=(new \DateTimeImmutable('now',new \DateTimeZone('Asia/Kolkata')))->format('Ymd_His');
             return $this->response->setHeader('Content-Type','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')->setHeader('Content-Disposition','attachment; filename="PrimeServe_API_Logs_'.$stamp.'.xlsx"')->setBody($bytes);
         } catch(Throwable $e){return $this->response->setStatusCode(422)->setJSON(['error'=>$e instanceof \RuntimeException?$e->getMessage():'Unable to export API logs.']);}

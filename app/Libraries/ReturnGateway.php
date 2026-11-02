@@ -40,6 +40,23 @@ final class ReturnGateway
         }
     }
 
+    public const DOCUMENT_PATHS = ['certificate'=>'/api/spark/prime/gst/regcert','challan-yearly'=>'/api/spark/prime/gst/paymentchallansfy','challan-monthly'=>'/api/spark/prime/gst/paymentchallans'];
+
+    public function documentRequest(string $service,array $credentials,array $fields): array
+    {
+        if ($this->fixture || !$this->ready() || !isset(self::DOCUMENT_PATHS[$service]) || !$this->store) throw new RuntimeException('This service requires the live Primeserve configuration.');
+        $audit=$this->store->auditStart($this->owner,$this->clientIp,'GST document request',$service,'POST',self::DOCUMENT_PATHS[$service],$credentials['apiKey']);
+        $started=microtime(true);$this->lastHttpStatus=null;
+        try {
+            $body=['gstin'=>$credentials['gstin'],'userName'=>$credentials['username'],'password'=>$credentials['password']]+$fields;
+            $response=$this->request('POST',$this->contract['baseUrl'].self::DOCUMENT_PATHS[$service],['Apikey: '.$credentials['apiKey'],'Accept: application/json, application/pdf, application/zip'],$body,41943040);
+            $response=DocumentResponse::normalize($response,[$credentials['apiKey'],$credentials['password']]);
+            // HTTP receipt is not a claim of business success. Unknown JSON is shown as returned.
+            $this->store->auditFinish($audit,($response['reportedError']??false)?'failed':'received',$this->lastHttpStatus,(int)((microtime(true)-$started)*1000));
+            return $response;
+        } catch (\Throwable $e) {$this->store->auditFinish($audit,'failed',$this->lastHttpStatus,(int)((microtime(true)-$started)*1000));throw $e;}
+    }
+
     public function otp(array $credentials): void { $this->track('OTP request',null,fn()=>$this->doOtp($credentials),$credentials['apiKey']); }
     public function connect(array $credentials,string $otp): array { return $this->track('GST connect',null,fn()=>$this->doConnect($credentials,$otp),$credentials['apiKey']); }
     public function initiate(array $credentials,array $job): string { return $this->track('Return initiation',$job['return_type'],fn()=>$this->doInitiate($credentials,$job),$credentials['apiKey']); }
@@ -163,7 +180,8 @@ final class ReturnGateway
         if ($code < 200 || $code >= 300) {
             $message=match(true) { $code===401||$code===403=>'Primeserve rejected authentication. Check your API key and GST connection.', $code===429=>'Primeserve rate limit reached. Please wait.', $code>=500=>'Primeserve is temporarily unavailable.', default=>'Primeserve rejected the request (HTTP '.$code.').' };
             $detail=$this->safeError($bytes,$headers,$body);
-            if ($detail!=='') $message.=' '.$detail;
+            if (DocumentResponse::accessDisabled($detail)) $message=DocumentResponse::API_ACCESS_DISABLED;
+            elseif ($detail!=='') $message.=' '.$detail;
             throw new ProviderException($message,$code,in_array($code,[400,401,403,404,422],true));
         }
         return ['body'=>$bytes,'contentType'=>$contentType];
@@ -175,7 +193,7 @@ final class ReturnGateway
         $candidate=$json['message']??$json['error_description']??$json['error']['message']??null;
         if (!is_string($candidate)) return '';
         foreach ($headers as $header) if (str_starts_with(strtolower($header),'apikey:')) $candidate=str_replace(trim(substr($header,7)),'[redacted]',$candidate);
-        foreach (['Otp','userName','gstin'] as $key) if (!empty($request[$key])) $candidate=str_replace((string)$request[$key],'[redacted]',$candidate);
+        foreach (['Otp','userName','gstin','password'] as $key) if (!empty($request[$key])) $candidate=str_replace((string)$request[$key],'[redacted]',$candidate);
         $candidate=preg_replace('~https?://\S+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\b[A-Z0-9]{15}\b|\bPS[A-Za-z0-9]{12,}\b~i','[redacted]',$candidate);
         return mb_substr(trim(preg_replace('/[\x00-\x1F\x7F]/',' ',strip_tags($candidate))),0,240);
     }
@@ -186,7 +204,7 @@ final class ReturnGateway
         $response=$this->request($spec['method'], $this->contract['baseUrl'].$spec['path'].($spec['method']==='GET'?'?'.http_build_query($params):''), in_array($section,['otp','connect','disconnect'],true)?['Apikey: '.$credentials['apiKey']]:$this->headers($credentials), $spec['method']==='GET'?null:$params);
         $json=json_decode($response['body'],true);
         if (!is_array($json)) throw new RuntimeException('Primeserve returned an unexpected response format.');
-        if (isset($spec['successPath']) && $this->at($json,$spec['successPath']) !== $spec['successValue']) throw new RuntimeException($section==='connect'?'GST connection was not confirmed. The OTP may be invalid or expired.':'Primeserve did not confirm success. Check your GST details.');
+        if (isset($spec['successPath']) && $this->at($json,$spec['successPath']) !== $spec['successValue']) throw new RuntimeException($section==='connect'?'GST connection was not confirmed. The OTP may be invalid or expired.':'API access is not enabled for your GSTIN. Please log in to the GST Portal and enable API access under My Profile → Manage API Access, then try again.');
         return $json;
     }
 

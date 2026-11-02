@@ -1,2 +1,19 @@
 .admin-header-label{font-size:11px;font-weight:600;letter-spacing:1px;color:#d8bb76}.admin-workspace{flex:1}.admin-login{max-width:470px;margin:55px auto 65px;padding:32px}.admin-login h1{font-size:25px}.admin-login .field{margin-bottom:20px}.admin-login .primary-action{width:100%;margin-top:4px}.admin-back{display:block;font-size:12px;text-align:center;color:#7185a2;margin-top:22px}.admin-metrics{grid-template-columns:repeat(4,1fr)}.admin-filters{display:flex;align-items:flex-end;gap:13px;padding:10px 28px 22px}.admin-filters .field:first-child{flex:1}.admin-filters .field:nth-child(2){min-width:165px}.admin-filters button{min-height:43px}.admin-table th,.admin-table td{font-size:10px}.admin-table td small{max-width:290px;overflow-wrap:anywhere}.admin-ip-note{font-size:11px;color:#7186a4;line-height:1.8;margin-top:18px}.admin-table .section-description{margin:8px 0 15px}.admin-table .row-message{max-width:260px}@media(max-width:700px){.admin-header-label{display:none}.admin-login{margin:25px auto}.admin-metrics{grid-template-columns:repeat(2,1fr)}.admin-filters{padding:10px 18px 20px;display:grid;grid-template-columns:1fr 1fr}.admin-filters .field{grid-column:1/-1}.admin-table table{min-width:900px}}
 .admin-export-actions{display:flex;align-items:center;gap:14px}.admin-export-options{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:0 28px 18px;font-size:10px;color:#7b8da7}.admin-export-options label{display:flex;align-items:center;gap:7px;color:#4b668d}.admin-export-options input{accent-color:#0b55d9}.audit-key-cell{min-width:170px;max-width:290px}.audit-key-value{display:block;font:10px Consolas,monospace;overflow-wrap:anywhere;user-select:text}.audit-key-cell button{font-size:10px;margin-top:6px}@media(max-width:700px){.admin-export-actions{justify-content:space-between;width:100%;margin-bottom:16px}.admin-export-options{padding:0 18px 18px;flex-direction:column;align-items:flex-start}.admin-table table{min-width:1180px}}
+
+/* Keep the sign-in form and footer together on a normal desktop viewport. */
+.admin-signin-page .page-shell{min-height:100dvh;display:flex;flex-direction:column}
+.admin-signin-page .admin-workspace{flex:1;display:flex;align-items:center;justify-content:center;padding:18px 0}
+.admin-signin-page .admin-login{width:100%;max-width:430px;margin:0;padding:26px 30px}
+.admin-signin-page .admin-login .eyebrow{font-size:10px;margin-bottom:6px}
+.admin-signin-page .admin-login h1{font-size:24px;line-height:1.25}
+.admin-signin-page .admin-login .section-description{font-size:12px;line-height:1.5;margin:10px 0 18px}
+.admin-signin-page .admin-login .field{margin-bottom:14px}
+.admin-signin-page .admin-login input{min-height:42px;padding:10px 12px}
+.admin-signin-page .admin-login .primary-action{min-height:42px;padding:10px 18px}
+.admin-signin-page .admin-back{margin-top:16px}
+.admin-signin-page .brand-header,.admin-signin-page .header-inner{min-height:82px}
+.admin-signin-page .brand-logo-image{width:270px}
+.admin-signin-page .brand-header,.admin-signin-page .brand-footer{flex-shrink:0}
+.admin-signin-page .matched-footer{padding:12px 0}
+@media(max-width:760px){.admin-signin-page .admin-login{max-width:400px;padding:22px}.admin-signin-page .admin-workspace{padding:18px 0}.admin-signin-page .matched-footer{gap:12px}.admin-signin-page .matched-footer .footer-logo-image{width:155px}.admin-signin-page .matched-footer .footer-contact{gap:5px}.admin-signin-page .matched-footer .footer-contact a{font-size:12px}.admin-signin-page .matched-footer .copyright{font-size:10px}}

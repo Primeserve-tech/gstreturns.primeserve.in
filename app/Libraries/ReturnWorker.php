@@ -14,17 +14,28 @@ final class ReturnWorker
         try {
             file_put_contents(WRITEPATH.'data/worker-v3-heartbeat',(string)time());
             $this->store->cleanup();
+            if(CustomerAccounts::enabled()){
+                $billing=new CustomerAccounts($this->store);
+                foreach($this->store->query("SELECT id FROM jobs WHERE status='initiating'")->fetchAll() as $interrupted)$billing->settle('return:'.$interrupted['id'],'review');
+            }
             $this->store->query("UPDATE jobs SET status='attention',message='Worker restarted during initiation. Check the provider outcome before any new request.',updated=? WHERE status='initiating'",[time()]);
             $job=$this->store->query("SELECT * FROM jobs WHERE status='queued' ORDER BY rowid LIMIT 1")->fetch();
             if ($job) {
                 $this->store->update($job['id'],['status'=>'initiating','message'=>'Initiating return request…']);
                 try {
+                    if(CustomerAccounts::enabled()){
+                        $billing=new CustomerAccounts($this->store);
+                        $usage=$this->store->query("SELECT id FROM billing_usage WHERE request_key=? AND status='reserved'",['return:'.$job['id']])->fetchColumn();
+                        if(!$usage)throw new \RuntimeException('A confirmed billing reservation is required before initiation.');
+                    }
                     $connection=$this->store->connection($job['owner']);
                     if ($connection['gstin']!==$job['gstin']) throw new \RuntimeException('Reconnect the GSTIN associated with this job.');
-                    $id=$this->gateway->audited($this->store,$job['owner'],$job['client_ip'])->initiate($this->store->open($connection['secret']),$job);
+                    $id=$this->gateway->audited($this->store,$job['owner'],$job['client_ip'])->initiate($this->store->credentials($job['owner'],$connection),$job);
+                    if(CustomerAccounts::enabled())$billing->settle('return:'.$job['id'],'charged');
                     $this->store->update($job['id'],['status'=>'processing','job_id'=>$id,'message'=>'Request accepted. Waiting for job completion.','next_poll'=>time()+$this->interval(),'deadline'=>min($this->store->assertWindow($job['owner']),time()+max(60,min(600,(int)env('GST_JOB_TIMEOUT_SECONDS',540))))]);
                 } catch (Throwable $e) {
                     $rejected=$e instanceof ProviderException && $e->definiteRejection;
+                    if(CustomerAccounts::enabled())(new CustomerAccounts($this->store))->settle('return:'.$job['id'],$rejected?'released':'review');
                     $this->store->update($job['id'],['status'=>$this->gateway->fixture||$rejected?'failed':'attention','message'=>$e->getMessage(),'retry_allowed'=>$this->gateway->fixture?1:0]);
                 }
             }
@@ -46,7 +57,7 @@ final class ReturnWorker
         try {
             $connection=$this->store->connection($job['owner']);
             if ($connection['gstin']!==$job['gstin']) throw new \RuntimeException('Reconnect the GSTIN associated with this job.');
-            $result=$this->gateway->audited($this->store,$job['owner'],$job['client_ip'])->status($this->store->open($connection['secret']),$job);
+            $result=$this->gateway->audited($this->store,$job['owner'],$job['client_ip'])->status($this->store->credentials($job['owner'],$connection),$job);
             $this->store->update($job['id'],['status'=>$result['status'],'upstream_status'=>$result['raw'],'poll_errors'=>0,'next_poll'=>time()+$this->interval(),'retry_allowed'=>$result['status']==='failed' && ($this->gateway->fixture || ($this->gateway->contract['allowInitiationRetry']??false))?1:0,'message'=>match($result['status']) {'completed'=>'Your ZIP file is ready to download.','failed'=>'The provider reported that this job failed.','empty'=>'No return data is available for this period.',default=>'The return is being processed.'}]);
         } catch (Throwable $e) {
             if ($e instanceof ProviderException && $e->providerStatus!==null) $this->store->update($job['id'],['upstream_status'=>$e->providerStatus]);

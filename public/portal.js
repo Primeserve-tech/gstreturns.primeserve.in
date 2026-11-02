@@ -33,7 +33,7 @@ async function api(path, data, download = false) {
     throw new Error(json.error || (response.status === 429 ? 'Too many requests. Please wait.' : 'The server could not complete the request.'));
   }
   if (download) {
-    if (!response.headers.get('Content-Type')?.includes('application/zip')) throw new Error('The download response was not a ZIP file.');
+    if (!['application/zip','application/json','application/pdf','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'].some(mime=>response.headers.get('Content-Type')?.includes(mime))) throw new Error('The download response format was not supported.');
     const blob = await response.blob();
     const receipt=response.headers.get('X-Download-Receipt');
     if(!receipt)throw new Error('The server did not provide a download confirmation receipt.');
@@ -103,7 +103,7 @@ function renderJobs() {
     if (job.status === 'completed') {
       const button = node('button','Download ZIP','table-action'); button.type='button'; button.disabled = busy;
       button.dataset.download='true';
-      button.addEventListener('click',() => action(button,async () => { await api(`/api/jobs/${job.id}/download`,{},true); notice(`${job.return_type} ZIP downloaded.`); })); cell.append(button);
+      button.addEventListener('click',() => action(button,async () => { await api(`/api/jobs/${job.id}/download`,{format:'zip'},true); notice(`${job.return_type} download received.`); })); cell.append(button);
     } else if (Number(job.retry_allowed)) {
       const resume = ['timeout','monitoring_error'].includes(job.status);
       const button = node('button',resume ? 'Resume checks' : 'Retry return','table-action'); button.type='button'; button.disabled = busy;
@@ -185,9 +185,7 @@ async function refresh() {
   finally { refreshing=false; }
 }
 
-const today=new Date(), currentYear=today.getMonth()>=3?today.getFullYear():today.getFullYear()-1;
-for(let year=currentYear;year>=2017;year--) { const value=`${year}-${String(year+1).slice(-2)}`; const option=node('option',value); option.value=value; $('financialYear').append(option); }
-$('month').value=String(today.getMonth()+1).padStart(2,'0');
+GSTCalendar.bind($('financialYear'),$('month'),true,()=>{requestKey=null;updateSelection();});
 for(const type of types) {
   const label=node('label',undefined,'return-choice'); label.dataset.return=type;
   const input=node('input'); input.type='checkbox'; input.value=type; input.addEventListener('change',updateSelection);
@@ -205,10 +203,11 @@ $('resetOtp').addEventListener('click',()=>action($('resetOtp'),async()=>{ await
 $('disconnect').addEventListener('click',()=>action($('disconnect'),async()=>{ const result=await api('/api/disconnect',{}); notice(result.message); }));
 $('startDownload').addEventListener('click',()=>action($('startDownload'),async()=>{
   requestKey ||= crypto.randomUUID();
-  const result=await api('/api/batches',{returns:selectedTypes(),financialYear:$('financialYear').value,month:$('month').value,scope:$('downloadScope').value,requestKey});
+  const confirmation=window.PrimeserveBilling?await window.PrimeserveBilling.confirm('returns',selectedTypes().length*chosenMonths().length):undefined;
+  const result=await api('/api/batches',{returns:selectedTypes(),financialYear:$('financialYear').value,month:$('month').value,scope:$('downloadScope').value,requestKey,confirmation});
   selectedBatch=result.batchId; requestKey=null; notice(result.message); $('processingTitle').scrollIntoView({behavior:'smooth',block:'start'});
 }));
-$('downloadAll').addEventListener('click',()=>action($('downloadAll'),async()=>{ await api('/api/download-all',{batchId:selectedBatch || state.jobs[0]?.batch_id},true); notice('Combined archive downloaded. Each individual ZIP is preserved unchanged.'); }));
+$('downloadAll').addEventListener('click',()=>action($('downloadAll'),async()=>{ await api('/api/download-all',{batchId:selectedBatch || state.jobs[0]?.batch_id,format:'zip'},true); notice('Combined ZIP archive downloaded.'); }));
 $('batchFilter').addEventListener('change',()=>{ selectedBatch=$('batchFilter').value; renderJobs(); updateSelection(); });
 setInterval(()=>{
   if(returnDeadline!==null){const left=Math.max(0,Math.ceil((returnDeadline-performance.now())/1000));$('retentionCountdown').textContent=`${Math.floor(left/60)}:${String(left%60).padStart(2,'0')}`;if(!left){returnDeadline=null;if(state)state.jobs=state.jobs.filter(job=>!job.expires_at||Number(job.expires_at)>serverNow());renderJobs();updateSelection();notice('Downloaded returns whose 10-minute timers expired have been deleted. Undownloaded returns remain available.');refresh();}}
