@@ -52,7 +52,7 @@
   el('additionalServiceForm').addEventListener('submit',async event=>{
     event.preventDefault();const button=el('getAdditionalService');if(button.disabled)return;
     clearResponse();button.disabled=true;button.classList.add('busy');button.setAttribute('aria-busy','true');service.disabled=true;
-    const payload={service:service.value==='certificate'?'certificate':`challan-${el('challanScope').value}`,apiKey:el('serviceApiKey').value,username:el('serviceUsername').value,gstin:el('serviceGstin').value,password:el('servicePassword').value,year:el('challanYear').value,month:el('challanMonth').value,downloadFormat:'zip'};
+    const payload={service:service.value==='certificate'?'certificate':`challan-${el('challanScope').value}`,apiKey:el('serviceApiKey').value,username:el('serviceUsername').value,gstin:el('serviceGstin').value,password:el('servicePassword').value,year:el('challanYear').value,month:el('challanMonth').value,downloadFormat:service.value==='certificate'?'pdf':'json'};
     el('servicePassword').value='';el('serviceApiKey').value='';
     try {
       if(window.PrimeserveBilling){payload.confirmation=await window.PrimeserveBilling.confirm(payload.service,1);payload.requestKey=crypto.randomUUID();}
@@ -61,12 +61,14 @@
       const format=response.headers.get('X-GST-Document-Format');if(!['json','pdf','zip','xlsx'].includes(format))throw new Error('Unexpected document response.');
       documentBlob=await response.blob();filename=response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1]||`GST_document.${format}`;
       el('serviceResponse').hidden=false;el('exportServiceCsv').hidden=format!=='json'||service.value!=='challan';
-      el('saveServiceResponse').textContent=format==='pdf'?'Download GST Certificate':format==='zip'?'Download ZIP':format==='xlsx'?'Download Excel':'Download JSON response';
+      el('saveServiceResponse').textContent=format==='pdf'?'Download GST Certificate (PDF)':format==='zip'?'Download Original Files (ZIP)':'Download Challan JSON';
       if(format==='json') {
         const json=JSON.parse(await documentBlob.text());responseRows=flatten(json);
         if(json?.error){const detail=typeof json.error==='string'?json.error:json.error.message;window.PortalErrors?.show(typeof detail==='string'?detail.slice(0,600):'Primeserve reported an error. Review the provider response below.');}
         for(const [key,value] of responseRows){const tr=document.createElement('tr');for(const text of [key,value]){const td=document.createElement('td');td.textContent=text;tr.append(td);}el('serviceResponseBody').append(tr);}
-        el('serviceResponseMessage').textContent='Primeserve returned the response below. Review its status and details; receipt does not confirm a successful GST operation. JSON export preserves the response; CSV exports up to 5,000 displayed fields. File links, if returned, appear as text until their download host and format are verified.';
+        el('serviceResponseMessage').textContent=json?.status===true&&Array.isArray(json.data)&&json.data.length===0
+          ? 'No challan records are available for the selected period. The original JSON response is available to download.'
+          : 'Primeserve returned the response below. Review its status and details. The JSON download preserves the returned data.';
       } else el('serviceResponseMessage').textContent='The provider returned a '+format.toUpperCase()+' file. Use the download button to save it.';
       if(format!=='json'||!JSON.parse(await documentBlob.text())?.error)save(documentBlob,filename);
       expiry=setTimeout(clearResponse,600000);

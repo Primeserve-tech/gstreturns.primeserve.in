@@ -50,7 +50,9 @@ abstract class BaseController extends Controller
         && (time() - $session->get('last_activity') > $timeout)) {
         
         $session->destroy();
-        return redirect()->to('/');
+        // initController return values do not redirect the request. Start a fresh
+        // session so the controller's authorization checks can run normally.
+        $session->start();
     }
 
     $session->set('last_activity', time());

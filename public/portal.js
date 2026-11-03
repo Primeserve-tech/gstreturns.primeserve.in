@@ -96,8 +96,9 @@ function renderJobs() {
     row.append(node('td', job.return_type), node('td', job.gstin));
     const period = node('td', job.financial_year); period.append(node('small', job.period)); row.append(period);
     row.append(node('td', job.job_id || 'Awaiting initiation', 'job-id'));
-    const status = node('td'); status.append(node('span', statusLabels[job.status] || job.status, `status-badge ${job.status}`));
-    if (job.message) status.append(node('p', job.message, 'row-message')); row.append(status);
+    const unavailable = String(job.upstream_status) === '101';
+    const status = node('td'); status.append(node('span', unavailable ? 'Document not Available' : (statusLabels[job.status] || job.status), `status-badge ${job.status}`));
+    if (job.message && !unavailable) status.append(node('p', job.message, 'row-message')); row.append(status);
     if(job.expires_at)status.append(node('small',`Deletes at ${new Date(job.expires_at*1000).toLocaleTimeString('en-IN')}`));
     const cell = node('td');
     if (job.status === 'completed') {
@@ -136,6 +137,7 @@ function render() {
   } else if (!state.ready) $('modeBanner').textContent='API integration is awaiting the verified response and ZIP download contract. Production requests are disabled.';
   else { $('modeBanner').textContent=''; }
   for(const job of state.jobs){
+    if(String(job.upstream_status)==='101')job.message='Document not Available';
     const signature=job.status+':'+job.message;
     if(hasJobSnapshot&&(['failed','attention','timeout','monitoring_error'].includes(job.status)||Number(job.poll_errors)>0)&&knownJobErrors.get(job.id)!==signature)window.PortalErrors?.show(`${job.return_type} (${job.period}): ${job.message||statusLabels[job.status]}`,{key:'job:'+job.id+':'+signature});
     knownJobErrors.set(job.id,signature);

@@ -60,9 +60,11 @@ class ReturnsPortal extends BaseController
     public function documentRequest()
     {
         return $this->result(function() {
-            $data=$this->input();$requested=GstDataExport::format($data['downloadFormat']??'json');$owner=$this->owner();$store=new ReturnStore();
+            $data=$this->input();$owner=$this->owner();$store=new ReturnStore();
             $store->rateLimit($owner,'documents',5,300);$service=(string)($data['service']??'');
             if (!isset(ReturnGateway::DOCUMENT_PATHS[$service])) throw new RuntimeException('Choose a valid GST service.');
+            // The service determines the original download format; never relabel JSON as PDF.
+            $requested=$service==='certificate'?'pdf':'json';
             $credentials=['apiKey'=>trim((string)($data['apiKey']??'')),'username'=>trim((string)($data['username']??'')),'gstin'=>strtoupper(trim((string)($data['gstin']??''))),'password'=>(string)($data['password']??'')];
             if(CustomerAccounts::enabled())$credentials['apiKey']=(new CustomerAccounts($store))->key($owner);
             if ($credentials['apiKey']==='') {
@@ -98,14 +100,16 @@ class ReturnsPortal extends BaseController
             }
             try{$response=(new ReturnGateway())->audited($store,$owner,$this->clientIp())->documentRequest($service,$credentials,$fields);}
             catch(Throwable $e){if($billing)$billing->settle($billingKey,$e instanceof \App\Libraries\ProviderException&&$e->definiteRejection?'released':'review');throw $e;}
-            if($billing)$billing->settle($billingKey,($response['reportedError']??false)?'released':(in_array($response['format'],['pdf','zip'],true)?'charged':'review'));
+            if($billing)$billing->settle($billingKey,($response['reportedError']??false)?'released':((in_array($response['format'],['pdf','zip'],true)||($response['confirmedSuccess']??false))?'charged':'review'));
+            if($response['reportedError']??false)throw new RuntimeException($response['errorMessage']?:'Primeserve reported that this document could not be retrieved.');
             if ($requested==='excel' && $response['format']==='json' && !($response['reportedError']??false)) {
                 $export=GstDataExport::excel(['provider-response.json'=>$response['body']],$store);
                 $response['body']=$export['bytes'];$response['format']='xlsx';
             } elseif ($response['format']==='zip' && in_array($requested,['json','excel','pdf'],true)) {
                 $export=GstDataExport::fromZip($response['body'],$requested,$store);$response['body']=$export['bytes'];$response['format']=$export['extension'];
             }
-            if($requested==='pdf' && !in_array($response['format'],['pdf','zip'],true)) throw new RuntimeException('No original GST Portal PDF was supplied. Choose another available format.');
+            if($requested==='pdf' && !in_array($response['format'],['pdf','zip'],true)) throw new RuntimeException('Primeserve did not supply a certificate PDF file. A JSON response cannot be downloaded as a certificate PDF. Please contact support with the request time.');
+            if($requested==='json' && !in_array($response['format'],['json','zip'],true)) throw new RuntimeException('Primeserve did not supply challan data in JSON format. Please contact support with the request time.');
             $format=$response['format'];$mime=['json'=>'application/json','pdf'=>'application/pdf','zip'=>'application/zip','xlsx'=>'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'][$format];
             return $this->response->setHeader('Content-Type',$mime)->setHeader('X-GST-Document-Format',$format)->setHeader('Content-Disposition','attachment; filename="'.$credentials['gstin'].'_'.$service.'.'.$format.'"')->setBody($response['body']);
         });

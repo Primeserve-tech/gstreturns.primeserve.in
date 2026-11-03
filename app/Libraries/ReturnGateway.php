@@ -51,6 +51,7 @@ final class ReturnGateway
             $body=['gstin'=>$credentials['gstin'],'userName'=>$credentials['username'],'password'=>$credentials['password']]+$fields;
             $response=$this->request('POST',$this->contract['baseUrl'].self::DOCUMENT_PATHS[$service],['Apikey: '.$credentials['apiKey'],'Accept: application/json, application/pdf, application/zip'],$body,41943040);
             $response=DocumentResponse::normalize($response,[$credentials['apiKey'],$credentials['password']]);
+            if($response['reportedError']??false)$response['errorMessage']=$this->safeError($response['body'],['Apikey: '.$credentials['apiKey']],$body);
             // HTTP receipt is not a claim of business success. Unknown JSON is shown as returned.
             $this->store->auditFinish($audit,($response['reportedError']??false)?'failed':'received',$this->lastHttpStatus,(int)((microtime(true)-$started)*1000));
             return $response;
@@ -178,6 +179,12 @@ final class ReturnGateway
         $this->lastHttpStatus=$code?:null;
         if ($ok === false) throw new RuntimeException($overflow ? 'API response exceeded the size limit.' : 'Network timeout or interruption. The request outcome may be unknown.');
         if ($code < 200 || $code >= 300) {
+            if((string)env('GST_AUTH_DIAGNOSTICS','0')==='1'&&str_ends_with(parse_url($url,PHP_URL_PATH)??'','/auth/connect')){
+                $schema=[];$inspect=function($node,string $path='',int $depth=0)use(&$inspect,&$schema){if(!is_array($node)||$depth>4)return;foreach($node as $key=>$value){if(count($schema)>=50)break;if(!is_string($key)||!preg_match('/^[a-z_]{1,30}$/iD',$key))continue;$field=$path===''?$key:$path.'.'.$key;$schema[$field]=get_debug_type($value);if(is_array($value))$inspect($value,$field,$depth+1);}};
+                $inspect(json_decode($bytes,true));
+                // Diagnostic metadata only: no response/request values, credentials or OTPs.
+                file_put_contents(WRITEPATH.'data/gst-connect-diagnostic.json',json_encode(['time'=>time(),'http'=>$code,'contentType'=>preg_replace('/[^a-zA-Z0-9;=\/ ._-]/','',$contentType),'responseBytes'=>strlen($bytes),'jsonFields'=>$schema],JSON_THROW_ON_ERROR),LOCK_EX);
+            }
             $message=match(true) { $code===401||$code===403=>'Primeserve rejected authentication. Check your API key and GST connection.', $code===429=>'Primeserve rate limit reached. Please wait.', $code>=500=>'Primeserve is temporarily unavailable.', default=>'Primeserve rejected the request (HTTP '.$code.').' };
             $detail=$this->safeError($bytes,$headers,$body);
             if (DocumentResponse::accessDisabled($detail)) $message=DocumentResponse::API_ACCESS_DISABLED;
@@ -189,11 +196,17 @@ final class ReturnGateway
 
     private function safeError(string $body,array $headers,?array $request): string
     {
-        $json=json_decode($body,true);if (!is_array($json)) return '';
-        $candidate=$json['message']??$json['error_description']??$json['error']['message']??null;
+        $json=json_decode($body,true);if(is_string($json))$json=['message'=>$json];if (!is_array($json)) return '';
+        $find=function(array $node,int $depth=0)use(&$find):?string{
+            foreach($node as $key=>$value)if(is_string($value)&&in_array(strtolower((string)$key),['message','error','error_description','error_desc','errormessage','error_message','error_msg','status_desc','description','title'],true)&&trim($value)!=='')return $value;
+            if($depth<3)foreach($node as $value)if(is_array($value)){ $found=$find($value,$depth+1);if($found!==null)return $found; }
+            return null;
+        };
+        $candidate=$find($json);
         if (!is_string($candidate)) return '';
         foreach ($headers as $header) if (str_starts_with(strtolower($header),'apikey:')) $candidate=str_replace(trim(substr($header,7)),'[redacted]',$candidate);
-        foreach (['Otp','userName','gstin','password'] as $key) if (!empty($request[$key])) $candidate=str_replace((string)$request[$key],'[redacted]',$candidate);
+        foreach (['Otp','otp','userName','username','gstin','password'] as $key) if (!empty($request[$key])) $candidate=str_replace((string)$request[$key],'[redacted]',$candidate);
+        $candidate=preg_replace('/\b[0-9]{6}\b/','[redacted]',$candidate);
         $candidate=preg_replace('~https?://\S+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|\b[A-Z0-9]{15}\b|\bPS[A-Za-z0-9]{12,}\b~i','[redacted]',$candidate);
         return mb_substr(trim(preg_replace('/[\x00-\x1F\x7F]/',' ',strip_tags($candidate))),0,240);
     }
@@ -204,7 +217,11 @@ final class ReturnGateway
         $response=$this->request($spec['method'], $this->contract['baseUrl'].$spec['path'].($spec['method']==='GET'?'?'.http_build_query($params):''), in_array($section,['otp','connect','disconnect'],true)?['Apikey: '.$credentials['apiKey']]:$this->headers($credentials), $spec['method']==='GET'?null:$params);
         $json=json_decode($response['body'],true);
         if (!is_array($json)) throw new RuntimeException('Primeserve returned an unexpected response format.');
-        if (isset($spec['successPath']) && $this->at($json,$spec['successPath']) !== $spec['successValue']) throw new RuntimeException($section==='connect'?'GST connection was not confirmed. The OTP may be invalid or expired.':'API access is not enabled for your GSTIN. Please log in to the GST Portal and enable API access under My Profile → Manage API Access, then try again.');
+        if (isset($spec['successPath']) && $this->at($json,$spec['successPath']) !== $spec['successValue']) {
+            $detail=$this->safeError($response['body'],['Apikey: '.$credentials['apiKey']],$params);
+            if(DocumentResponse::accessDisabled($detail))$detail=DocumentResponse::API_ACCESS_DISABLED;
+            throw new RuntimeException($detail!==''?$detail:'Primeserve did not confirm '.$section.' success. Please check your GST details or contact support with the request time.');
+        }
         return $json;
     }
 
@@ -221,7 +238,11 @@ final class ReturnGateway
             if ($otp!=='123456') throw new RuntimeException('Invalid fixture OTP. Use 123456 in local test mode.');
             return ['fixture'=>true];
         }
-        return $this->api('connect',$credentials,['userName'=>$credentials['username'],'gstin'=>$credentials['gstin'],'Otp'=>$otp,'KeepAliveDays'=>30]);
+        try{return $this->api('connect',$credentials,['userName'=>$credentials['username'],'gstin'=>$credentials['gstin'],'Otp'=>$otp,'KeepAliveDays'=>30]);}
+        catch(ProviderException $error){
+            if($error->getMessage()==='Primeserve rejected the request (HTTP 400).')throw new ProviderException('Primeserve rejected GST OTP verification (HTTP 400) without a readable reason. Request a fresh OTP and enter only the latest OTP for this GST account. If it fails again, contact Primeserve support with the request time.',400,true);
+            throw $error;
+        }
     }
 
     private function doInitiate(array $credentials, array $job): string
@@ -248,6 +269,9 @@ final class ReturnGateway
         }
         $json=$this->api('status',$credentials,['jobid'=>$job['job_id']]); $spec=$this->contract['status']; $raw=$this->at($json,$spec['statusPath']);
         $normalized=is_string($raw)&&ctype_digit($raw)?(int)$raw:$raw;
+        if($normalized===101)return ['status'=>'failed','raw'=>'101','message'=>'Document not Available'];
+        // Actual provider failures include an explicit error. Do not infer failure from status 101 alone.
+        if(!empty($json['error']))return ['status'=>'failed','raw'=>is_scalar($raw)?(string)$raw:'','message'=>$this->safeError(json_encode(['error'=>$json['error']]),['Apikey: '.$credentials['apiKey']],['gstin'=>$credentials['gstin'],'userName'=>$credentials['username']])?:'The provider reported that this return could not be retrieved.'];
         foreach (['pendingValues'=>'processing','completedValues'=>'completed','failedValues'=>'failed','emptyValues'=>'empty'] as $key=>$status) if (in_array($normalized,$spec[$key],true)) return ['status'=>$status,'raw'=>is_scalar($raw)?(string)$raw:''];
         $safeStatus=is_scalar($raw)&&preg_match('/^[A-Za-z0-9_. -]{1,60}$/',(string)$raw)?(string)$raw:'unrecognized';
         throw new ProviderException('Provider job status: '.$safeStatus.'. This status is not documented; checks use bounded retries without a new return request.',200,false,$safeStatus);

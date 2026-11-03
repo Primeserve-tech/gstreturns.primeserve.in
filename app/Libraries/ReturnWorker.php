@@ -58,7 +58,7 @@ final class ReturnWorker
             $connection=$this->store->connection($job['owner']);
             if ($connection['gstin']!==$job['gstin']) throw new \RuntimeException('Reconnect the GSTIN associated with this job.');
             $result=$this->gateway->audited($this->store,$job['owner'],$job['client_ip'])->status($this->store->credentials($job['owner'],$connection),$job);
-            $this->store->update($job['id'],['status'=>$result['status'],'upstream_status'=>$result['raw'],'poll_errors'=>0,'next_poll'=>time()+$this->interval(),'retry_allowed'=>$result['status']==='failed' && ($this->gateway->fixture || ($this->gateway->contract['allowInitiationRetry']??false))?1:0,'message'=>match($result['status']) {'completed'=>'Your ZIP file is ready to download.','failed'=>'The provider reported that this job failed.','empty'=>'No return data is available for this period.',default=>'The return is being processed.'}]);
+            $this->store->update($job['id'],['status'=>$result['status'],'upstream_status'=>$result['raw'],'poll_errors'=>0,'next_poll'=>time()+$this->interval(),'retry_allowed'=>$result['status']==='failed' && ($this->gateway->fixture || ($this->gateway->contract['allowInitiationRetry']??false))?1:0,'message'=>$result['message']??match($result['status']) {'completed'=>'Your ZIP file is ready to download.','failed'=>'The provider reported that this job failed.','empty'=>'No return data is available for this period.',default=>'The return is being processed.'}]);
         } catch (Throwable $e) {
             if ($e instanceof ProviderException && $e->providerStatus!==null) $this->store->update($job['id'],['upstream_status'=>$e->providerStatus]);
             $errors=(int)$job['poll_errors']+1;
