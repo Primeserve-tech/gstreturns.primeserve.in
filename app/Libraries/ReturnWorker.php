@@ -20,6 +20,13 @@ final class ReturnWorker
             }
             $this->store->query("UPDATE jobs SET status='attention',message='Worker restarted during initiation. Check the provider outcome before any new request.',updated=? WHERE status='initiating'",[time()]);
             $job=$this->store->query("SELECT * FROM jobs WHERE status='queued' ORDER BY rowid LIMIT 1")->fetch();
+            if($job && CustomerAccounts::enabled()){
+                $usage=$this->store->query('SELECT customer_id FROM billing_usage WHERE request_key=?',['return:'.$job['id']])->fetch();
+                if($usage && !(new PrivacyConsent($billing))->status($usage['customer_id'])['active']){
+                    $billing->settle('return:'.$job['id'],'released');
+                    $this->store->update($job['id'],['status'=>'failed','message'=>'GST request cancelled before initiation: privacy consent is not active.','retry_allowed'=>0]);return true;
+                }
+            }
             if ($job) {
                 $this->store->update($job['id'],['status'=>'initiating','message'=>'Initiating return request…']);
                 try {
@@ -55,6 +62,12 @@ final class ReturnWorker
             $this->store->update($job['id'],['status'=>'timeout','message'=>'Monitoring deadline reached. You may resume status checks without initiating a new return.','retry_allowed'=>1]); return;
         }
         try {
+            if(CustomerAccounts::enabled()){
+                $a=new CustomerAccounts($this->store);$usage=$this->store->query('SELECT customer_id FROM billing_usage WHERE request_key=?',['return:'.$job['id']])->fetch();
+                if($usage && !(new PrivacyConsent($a))->status($usage['customer_id'])['active']){
+                    $this->store->update($job['id'],['status'=>'monitoring_error','message'=>'Status monitoring paused because privacy consent is not active.','retry_allowed'=>0]);return;
+                }
+            }
             $connection=$this->store->connection($job['owner']);
             if ($connection['gstin']!==$job['gstin']) throw new \RuntimeException('Reconnect the GSTIN associated with this job.');
             $result=$this->gateway->audited($this->store,$job['owner'],$job['client_ip'])->status($this->store->credentials($job['owner'],$connection),$job);

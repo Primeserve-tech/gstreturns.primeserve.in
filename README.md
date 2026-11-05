@@ -1,3 +1,11 @@
+## Current customer/Admin release (5 November 2026)
+
+This release includes wallet adjustments, manual refund requests, account blocking/unblocking with email, standard versus special client pricing, one-time privacy consent, complete split Excel exports and client GSTIN usage context. Recent dashboard tables show 50 records; actionable pending queues are not limited to those 50.
+
+Use `/docker-compose.coolify.yml` for the existing Coolify deployment. Keep the existing secrets and writable volume. Review [production checks and rollback](docs/PRODUCTION_REVIEW_2026-11-05.md) before release. Database migrations v5-v9 are additive and automatic; take a protected backup first. Existing users must consent once before using GST services.
+
+Separate branded [User Manual](output/pdf/Primeserve_GST_Document_Centre_User_Manual.pdf) and [Admin Manual](output/pdf/Primeserve_GST_Document_Centre_Admin_Manual.pdf) are included. See [refunds](docs/REFUND_WORKFLOW.md), [account access](docs/ACCOUNT_ACCESS.md), [pricing](docs/STANDARD_PRICING.md) and [consent](docs/PRIVACY_CONSENT.md).
+
 # PrimeServe GST Return Download Portal
 
 Local live API portal: **http://127.0.0.1:8086/**

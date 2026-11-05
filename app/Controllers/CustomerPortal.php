@@ -12,6 +12,8 @@ class CustomerPortal extends BaseController
     private function csrf():string{if(!session()->has('customer_csrf'))session()->set('customer_csrf',bin2hex(random_bytes(32)));return session()->get('customer_csrf');}
     private function owner():string{return (string)session()->get('customer_owner');}
     private function ip():string{return ClientIp::resolve((string)$this->request->getServer('REMOTE_ADDR'),$this->request->getHeaderLine('X-Forwarded-For'));}
+    public function privacyNotice(){ $this->headers(); return view('privacy_notice'); }
+    public function refundPolicy(){ $this->headers(); return view('refund_policy'); }
     public function page(string $screen='login')
     {
         $this->headers();if(!CustomerAccounts::enabled())return $this->response->setStatusCode(404)->setBody('Customer accounts are not enabled.');
@@ -41,6 +43,12 @@ class CustomerPortal extends BaseController
                     $upi=$prepaid?['id'=>$a->setting('upi_id'),'name'=>$a->setting('upi_name')]:null;
                     if($prepaid&&$upi['id']!=='')$upi=\App\Libraries\UpiPayment::details($upi['id'],$upi['name']?:'Primeserve Global Solution Private Limited');
                     $result=['customer'=>$a->publicCustomer($c),'dashboard'=>$dashboard,'keyRequired'=>!$prepaid&&!$c['api_secret'],'prices'=>$prices,'upi'=>$upi];break;
+                case 'session-status':
+                    try{$a->customer($this->owner());$result=['active'=>true];}catch(RuntimeException){session()->remove(['customer_owner','return_owner','return_csrf','customer_csrf']);session()->regenerate(true);return $this->response->setStatusCode(401)->setJSON(['active'=>false]);}break;
+                case 'privacy':
+                    $c=$a->customer($this->owner());$op=$d['operation']??'';if(!in_array($op,['grant','withdraw'],true))throw new RuntimeException('Choose a valid consent action.');
+                    if($op==='grant'&&(($d['consent']??false)!==true||($d['version']??'')!==\App\Libraries\PrivacyConsent::VERSION))throw new RuntimeException('Read the current Privacy Notice and tick consent.');
+                    $a->atomic(function()use($a,$c,$op){$p=new \App\Libraries\PrivacyConsent($a);$op==='grant'?$p->grant($c['id']):$p->withdraw($c['id']);});$result=['message'=>$op==='grant'?'Consent saved. You will not be asked again for the same purposes.':'Consent withdrawn. GST services are paused. Your account, refund access and financial records remain available.'];break;
                 case 'balance':$result=$a->headerBalance($this->owner());break;
                 case 'history-export':
                     $bytes=$a->historyExport($this->owner(),(string)($d['kind']??''),(string)($d['from']??''),(string)($d['to']??''));
@@ -52,6 +60,7 @@ class CustomerPortal extends BaseController
                     $q=$a->quote($this->owner(),(string)($d['service']??''),(int)($d['count']??1));$expires=time()+300;$payload=['owner'=>$this->owner(),'service'=>$q['service'],'count'=>$q['count'],'gross'=>$q['gross'],'expires'=>$expires];$result=$q+['confirmation'=>$a->store->seal($payload)];break;
                 case 'key':$a->updateKey($this->owner(),trim((string)($d['key']??'')));$result=['message'=>'API key updated for this login session.'];break;
                 case 'billing-details':$a->billingDetails($this->owner(),(string)($d['state']??''),(string)($d['gstin']??''));$result=['message'=>'Billing details updated for future transactions. Historical charges are unchanged.'];break;
+                case 'refund':$id=(new \App\Libraries\WalletRefunds($a))->request($this->owner(),$d);$result=['id'=>$id,'message'=>'Refund request '+$id+' submitted. You MUST also email complete details and a valid reason to support@primeserve.in, quoting this request ID. Both steps are mandatory. No email or money is sent automatically.'];break;
                 case 'recharge':$result=['id'=>$a->recharge($this->owner(),(string)($d['amount']??''),(string)($d['utr']??'')),'message'=>'Payment submitted for independent verification. No wallet credit has been added yet.'];break;
                 case 'logout':$a->logout($this->owner());session()->remove(['customer_owner','return_owner','return_csrf','customer_csrf']);session()->regenerate(true);$result=['redirect'=>'/login'];break;
                 default:throw new RuntimeException('Unknown account action.');

@@ -11,3 +11,8 @@
 /.env.*
 !/.env.example
 !/.env.customers.example
+
+# Local authoring and diagnostic scratch files
+/tmp/
+/docs/LOCAL_GST_CONNECT_FAILURE.md
+/output/pdf/Primeserve_GST_Document_Centre_Admin_and_User_Manual.pdf

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="<?= esc($csrf, 'attr') ?>">
-  <?php if($customersEnabled??false): ?><meta name="customer-csrf" content="<?= esc($customerCsrf??'', 'attr') ?>"><link rel="stylesheet" href="/customer.css?v=header-balance-1"><script src="/billing.js?v=header-balance-1" defer></script><script src="/customer-navigation.js?v=1" defer></script><?php endif ?>
+  <?php if($customersEnabled??false): ?><meta name="customer-csrf" content="<?= esc($customerCsrf??'', 'attr') ?>"><link rel="stylesheet" href="/customer.css?v=header-balance-1"><script src="/customer-session.js?v=1" defer></script><script src="/billing.js?v=header-balance-1" defer></script><script src="/customer-navigation.js?v=1" defer></script><?php endif ?>
   <title>GST Return Download Portal | PrimeServe</title>
   <link rel="icon" href="/company-tab-logo.png"><link rel="stylesheet" href="/brand.css"><link rel="stylesheet" href="/portal.css?v=export-formats">
 

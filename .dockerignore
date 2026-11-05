@@ -5,3 +5,6 @@ writable/*
 tests
 docs
 README.md
+
+tmp
+output

@@ -5,7 +5,7 @@ define('ROOTPATH',dirname(__DIR__).DIRECTORY_SEPARATOR);define('APPPATH',ROOTPAT
 use App\Libraries\ReturnStore;use App\Libraries\CustomerAccounts;use App\Libraries\ReturnGateway;use App\Libraries\ReturnWorker;
 function ok($v,$m){if(!$v)throw new RuntimeException($m);echo 'PASS '.$m.PHP_EOL;}
 $otp='';$s=new ReturnStore();$a=new CustomerAccounts($s,function($email,$name,$subject,$body)use(&$otp){if(str_contains($subject,'Verify')){preg_match('/\b([0-9]{6})\b/',$body,$match);$otp=$match[1];}});
-$reg=$a->register(['name'=>'HTTP Test','company'=>'Fixture Company','email'=>'http@example.com','mobile'=>'9876543200','password'=>'FixturePassword123!','confirm'=>'FixturePassword123!'],'fixture-ip');$a->verify($reg,$otp,'fixture-ip');
+$reg=$a->register(['privacyConsent'=>true,'privacyVersion'=>App\Libraries\PrivacyConsent::VERSION,'name'=>'HTTP Test','company'=>'Fixture Company','email'=>'http@example.com','mobile'=>'9876543200','password'=>'FixturePassword123!','confirm'=>'FixturePassword123!'],'fixture-ip');$a->verify($reg,$otp,'fixture-ip');
 $s->query("INSERT INTO customer_settings VALUES('prepaid_key',?)",[$s->seal(['key'=>'fixture-server-key'])]);
 foreach(['upi_id'=>'8368414690.1@hdfc','upi_name'=>'Primeserve Global Solution Private Limited']as$key=>$value)$s->query('UPDATE customer_settings SET value=? WHERE name=?',[$value,$key]);
 $cookie=tempnam(sys_get_temp_dir(),'ps-http-');$csrf='';
@@ -13,7 +13,7 @@ function request($path,$data=null,$token=null){global $cookie,$csrf;$ch=curl_ini
 foreach(['/.env','/composer.json','/app/Config/Routes.php','/writable/data/returns-v3-fixture.sqlite','/.git/config']as$privatePath)ok(in_array(request($privatePath)[0],[302,303,403,404],true),'private server path blocked: '.$privatePath.' status '.request($privatePath)[0]);
 ok(request('/api/state')[0]===422,'anonymous GST access blocked');ok(request('/admin/customers/state',[])[0]===401,'anonymous admin billing access blocked');
 $page=request('/login')[1];preg_match('/name="customer-csrf" content="([^"]+)"/',$page,$m);$csrf=$m[1];ok(request('/customer/login',['email'=>'http@example.com','password'=>'FixturePassword123!'],'bad-token')[0]===422,'customer CSRF enforced');
-$popupAttempt=$a->register(['name'=>'Popup Test','company'=>'Fixture Company','email'=>'popup@example.com','mobile'=>'9876543201','password'=>'FixturePassword123!','confirm'=>'FixturePassword123!'],'popup-fixture-ip');
+$popupAttempt=$a->register(['privacyConsent'=>true,'privacyVersion'=>App\Libraries\PrivacyConsent::VERSION,'name'=>'Popup Test','company'=>'Fixture Company','email'=>'popup@example.com','mobile'=>'9876543201','password'=>'FixturePassword123!','confirm'=>'FixturePassword123!'],'popup-fixture-ip');
 ok(request('/customer/verify',['attempt'=>$popupAttempt,'otp'=>$otp])[0]===200,'verified registration succeeds through HTTP');
 $completedPage=request('/login')[1];ok(str_contains($completedPage,'id="registrationSuccessDialog"')&&str_contains($completedPage,'Registration complete'),'registration success popup survives redirect to Login');
 ok(!str_contains(request('/login')[1],'id="registrationSuccessDialog"'),'registration popup appears only once');
@@ -22,6 +22,21 @@ ok(str_contains($page,'Available Wallet Balance')&&str_contains($page,'Signup Bo
 ok(!str_contains($page,'Approved Credit Limit')&&!str_contains($page,'Outstanding Amount')&&!str_contains($page,'id="sessionKeyForm"'),'prepaid account excludes postpaid sections on server');
 ok(str_contains($page,'aria-label="Customer navigation"')&&str_contains($page,'/account#profile')&&!str_contains($page,'>Register</a>'),'signed-in account navigation has Services Account Profile Logout');
 ok(request('/admin/customers/state',[])[0]===401,'ordinary customer cannot administer billing');
+ok(request('/customer/privacy',['operation'=>'withdraw'],'bad')[0]===422,'consent withdrawal requires CSRF');
+ok(request('/customer/privacy',['operation'=>'withdraw'])[0]===200,'customer can withdraw consent');
+ok(request('/api/state')[0]===422,'withdrawal blocks GST API access');
+ok(request('/account')[0]===200,'withdrawal preserves account and refund access');
+ok(request('/')[0]===302,'withdrawn consent redirects services to account');
+ok(request('/customer/privacy',['operation'=>'grant','consent'=>true,'version'=>App\Libraries\PrivacyConsent::VERSION])[0]===200,'customer can restore consent explicitly');
+ok(request('/')[0]===200,'consent restored without repeated prompts');
+
+ok(request('/admin/customers/access',['id'=>'other-customer','operation'=>'block','reason'=>'Unauthorized block'])[0]===401,'customer cannot block accounts');
+ok(request('/customer/session-status',[])[2]['active']===true,'customer heartbeat confirms active session');
+ok(request('/admin/customers/wallet-debit',['id'=>'other','amount'=>'1','reason'=>'Unauthorized correction','requestId'=>'unauthorized-debit-001','confirmed'=>true])[0]===401,'customer cannot reduce wallet balances');
+ok(request('/admin/customers/refund-review',['id'=>'other','decision'=>'approve','amount'=>'1','reason'=>'Unauthorized','emailReceived'=>true])[0]===401,'customer cannot approve refunds');
+ok(request('/customer/refund',['amount'=>'1'],'invalid')[0]===422,'refund request requires CSRF');
+ok(request('/refund-policy')[0]===200&&str_contains(request('/refund-policy')[1],'both'),'public refund policy explains both mandatory steps');
+ok(request('/admin/customers/wallet-credit',['id'=>'other-customer','amount'=>'100','reason'=>'Unauthorized credit','requestId'=>'unauthorized-credit-001'])[0]===401,'ordinary customer cannot grant wallet balance');
 $page=request('/')[1];preg_match('/name="csrf-token" content="([^"]+)"/',$page,$m);$returnToken=$m[1];ok(str_contains($page,'billing.js'),'authenticated portal uses billing confirmation');
 $state=request('/customer/state',[])[2];ok(!str_contains(json_encode($state),'fixture-server-key')&&!str_contains(json_encode($state),'password_hash'),'customer state contains no credentials');
 ok($state['upi']['id']==='8368414690.1@hdfc'&&str_starts_with($state['upi']['qrDataUri'],'data:image/svg+xml;base64,')&&str_contains($state['upi']['intent'],'pa=8368414690.1%40hdfc'),'authenticated prepaid account receives local UPI QR and correct destination');
@@ -39,7 +54,7 @@ $excel=request('/admin/customers/excel',['kind'=>'payments','from'=>$reportDate,
 ok(request('/admin/customers/excel',['kind'=>'customers','from'=>$reportDate,'to'=>$reportDate],'invalid')[0]===422,'Admin Excel requires CSRF token');
 ok(request('/admin/customers/excel',['kind'=>'customers','from'=>'2026-02-30','to'=>$reportDate])[0]===422,'Admin Excel rejects invalid dates');
 ok(request('/admin/customers/state',[],'invalid')[0]===422,'admin billing CSRF enforced');$admin=request('/admin/customers/state',[]);ok($admin[0]===200&&!str_contains($admin[1],'fixture-server-key')&&!str_contains($admin[1],'password_hash'),'admin billing data excludes API secrets and password hashes');
-ok(request('/admin/customers/settings',['name'=>'bonus_active','value'=>'0'])[0]===200,'admin can immediately deactivate signup offer');ok($a->setting('bonus_active')==='0','admin offer update persisted');ok(request('/admin/customers/settings',['name'=>'ZOHO_CPAAS_API_KEY','value'=>'forbidden'])[0]===422,'Zoho credentials cannot be configured through customer settings API');
+ok(request('/admin/customers/settings',['privacyConsent'=>true,'privacyVersion'=>App\Libraries\PrivacyConsent::VERSION,'name'=>'bonus_active','value'=>'0'])[0]===200,'admin can immediately deactivate signup offer');ok($a->setting('bonus_active')==='0','admin offer update persisted');ok(request('/admin/customers/settings',['privacyConsent'=>true,'privacyVersion'=>App\Libraries\PrivacyConsent::VERSION,'name'=>'ZOHO_CPAAS_API_KEY','value'=>'forbidden'])[0]===422,'Zoho credentials cannot be configured through customer settings API');
 $customerId=$s->query("SELECT id FROM customers WHERE email='http@example.com'")->fetchColumn();$rechargeId=CustomerAccounts::id();$s->query('INSERT INTO recharge_requests(id,customer_id,amount,utr,created) VALUES(?,?,?,?,?)',[$rechargeId,$customerId,1000,'HTTP-UTR123',time()]);
 ok(request('/admin/customers/recharge',['id'=>$rechargeId,'approve'=>true,'bankVerified'=>false])[0]===422,'recharge approval requires independent bank verification');
 $approval=['id'=>$rechargeId,'approve'=>true,'bankVerified'=>true,'reason'=>'Fixture bank verification'];ok(request('/admin/customers/recharge',$approval)[0]===200&&request('/admin/customers/recharge',$approval)[0]===200,'repeated admin approval is idempotent');ok((int)$s->query('SELECT balance FROM customers WHERE id=?',[$customerId])->fetchColumn()===3646,'HTTP recharge credits exactly once');
@@ -62,4 +77,37 @@ ok(request('/customer/statement',['month'=>'2026-99'])[0]===422,'invalid stateme
 ok(request('/admin/customers/customer',['id'=>$customerId,'mode'=>'PREPAID','creditLimit'=>'100.00','termsDays'=>15,'enabled'=>true],$adminToken)[0]===200,'Admin converts account back to prepaid');
 ok($s->query('SELECT * FROM customer_ledger WHERE customer_id=? ORDER BY id',[$customerId])->fetchAll()===$walletBefore&&$s->query("SELECT * FROM billing_usage WHERE customer_id=? AND mode='PREPAID'",[$customerId])->fetchAll()===$historicCharge,'billing mode changes preserve wallet records and historical prices');
 ok((int)$s->query('SELECT outstanding FROM customers WHERE id=?',[$customerId])->fetchColumn()===590,'billing mode changes retain postpaid outstanding records');
+$credit=['id'=>$customerId,'amount'=>'25.00','reason'=>'Fixture authorized adjustment','requestId'=>'http-admin-credit-0001'];
+ok(request('/admin/customers/wallet-credit',$credit,'invalid')[0]===422,'direct Admin credit requires valid CSRF');
+$debit=['id'=>$customerId,'amount'=>'1.00','reason'=>'Fixture wrong credit correction','requestId'=>'http-admin-debit-0001','confirmed'=>true];
+ok(request('/admin/customers/wallet-debit',$debit,'invalid')[0]===422,'wallet reduction requires Admin CSRF');
+ok(request('/admin/customers/wallet-debit',array_replace($debit,['confirmed'=>false]),$adminToken)[0]===422,'wallet reduction requires explicit confirmation');
+$creditBefore=(int)$s->query('SELECT balance FROM customers WHERE id=?',[$customerId])->fetchColumn();
+ok(request('/admin/customers/wallet-credit',$credit,$adminToken)[0]===200&&request('/admin/customers/wallet-credit',$credit,$adminToken)[0]===200,'Admin HTTP wallet credit accepts safe repeated request');
+ok((int)$s->query('SELECT balance FROM customers WHERE id=?',[$customerId])->fetchColumn()===$creditBefore+2500,'Admin HTTP wallet credit applies exactly once');
+ok(request('/admin/customers/wallet-debit',$debit,$adminToken)[0]===200&&request('/admin/customers/wallet-debit',$debit,$adminToken)[0]===200,'Admin HTTP correction is idempotent');
+ok((int)$s->query('SELECT balance FROM customers WHERE id=?',[$customerId])->fetchColumn()===$creditBefore+2400,'HTTP correction reduces balance once');
+ok(request('/admin/customers/access',['id'=>$customerId,'operation'=>'block','reason'=>'Fixture block check'],'invalid')[0]===422,'account block requires Admin CSRF');
+ok(request('/admin/customers/access',['id'=>$customerId,'operation'=>'block','reason'=>'Fixture block check'],$adminToken)[0]===200,'Admin can block customer');
+ok(request('/customer/session-status',[],$csrf)[0]===401,'revoked customer heartbeat returns unauthorized');
+
+ok(request('/admin/customers/access',['id'=>$customerId,'operation'=>'unblock','reason'=>'Fixture unblock check'],$adminToken)[0]===200,'Admin can unblock customer');
+ok(request('/admin/customers/price',['id'=>$customerId,'service'=>'returns','net'=>'2.50','enabled'=>true,'pricingMode'=>'special'],$adminToken)[0]===200,'Admin can set protected special price');
+ok(request('/admin/customers/settings',['privacyConsent'=>true,'privacyVersion'=>App\Libraries\PrivacyConsent::VERSION,'name'=>'price_returns','value'=>'4.00'],$adminToken)[0]===200,'Admin can change standard price');
+ok((int)$s->query('SELECT net FROM customer_prices WHERE customer_id=? AND service=?',[$customerId,'returns'])->fetchColumn()===250,'HTTP standard update preserves special client');
+ok(request('/admin/customers/price',['id'=>$customerId,'service'=>'returns','net'=>'0','enabled'=>true,'pricingMode'=>'standard'],$adminToken)[0]===200,'Admin can restore standard pricing');
+ok((int)$s->query('SELECT net FROM customer_prices WHERE customer_id=? AND service=?',[$customerId,'returns'])->fetchColumn()===400,'restored standard uses current default');
+// Recent history must never hide actionable old requests.
+$s->query("INSERT INTO recharge_requests(id,customer_id,amount,utr,status,created) VALUES(?,?,?,?,?,?)",['old-pending-recharge',$customerId,100,'OLDPENDINGREF001','pending',time()-10000]);
+$s->query('INSERT INTO refund_requests(id,customer_id,request_key,requested,destination,reason,created) VALUES(?,?,?,?,?,?,?)',['old-pending-refund',$customerId,'old-pending-refund-key',100,$s->seal(['upi'=>'fixture@hdfc']),'Old pending fixture reason',time()-10000]);
+for($i=0;$i<55;$i++){
+ $s->query("INSERT INTO recharge_requests(id,customer_id,amount,utr,status,created) VALUES(?,?,?,?,?,?)",['recent-recharge-'.$i,$customerId,100,'RECENTREF'.$i,'rejected',time()]);
+ $s->query("INSERT INTO refund_requests(id,customer_id,request_key,requested,destination,reason,status,created) VALUES(?,?,?,?,?,?,?,?)",['recent-refund-'.$i,$customerId,'recent-refund-key-'.$i,100,$s->seal(['upi'=>'fixture@hdfc']),'Recent rejected fixture','rejected',time()]);
+}
+$queue=request('/admin/customers/state',[],$adminToken)[2];
+ok(count($queue['recharges'])===50&&count($queue['refunds'])===50,'recent payment and refund history stays capped at 50');
+ok(in_array('old-pending-recharge',array_column($queue['pendingRecharges'],'id'),true),'old pending recharge remains actionable beyond recent 50');
+ok(in_array('old-pending-refund',array_column($queue['openRefunds'],'id'),true),'old open refund remains actionable beyond recent 50');
+$priorCookie=$cookie;$cookie=tempnam(sys_get_temp_dir(),'ps-http-anonymous-');unlink($priorCookie);
+ok(request('/admin/customers/wallet-credit',$credit,$adminToken)[0]===401,'anonymous caller cannot grant wallet credits');
 unlink($cookie);

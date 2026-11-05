@@ -24,6 +24,8 @@ $routes->post('admin/logout', 'ReturnAdmin::logout');
 $routes->post('admin/api/activity/(:segment)/key', 'ReturnAdmin::revealKey/$1');
 $routes->post('admin/export', 'ReturnAdmin::export');
 $routes->get('register', 'CustomerPortal::page/register');
+$routes->get('privacy-notice', 'CustomerPortal::privacyNotice');
+$routes->get('refund-policy', 'CustomerPortal::refundPolicy');
 $routes->get('login', 'CustomerPortal::page/login');
 $routes->get('account', 'CustomerPortal::page/account');
 $routes->get('forgot-password', 'CustomerPortal::page/forgot');

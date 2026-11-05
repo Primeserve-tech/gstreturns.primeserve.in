@@ -24,7 +24,7 @@ class ReturnsPortal extends BaseController
     private function guard(): void
     {
         $this->owner();
-        if(CustomerAccounts::enabled())(new CustomerAccounts(new ReturnStore()))->customer($this->owner());
+        if(CustomerAccounts::enabled()){$a=new CustomerAccounts(new ReturnStore());$c=$a->customer($this->owner());(new \App\Libraries\PrivacyConsent($a))->require($c['id']);}
         if ((string)env('GST_MODE','disabled')==='fixture' && !in_array($this->request->getIPAddress(),['127.0.0.1','::1'],true)) throw new RuntimeException('Fixture mode is restricted to localhost.');
         if ($this->request->getMethod()==='POST' && !hash_equals(session()->get('return_csrf'),(string)$this->request->getHeaderLine('X-CSRF-Token'))) throw new RuntimeException('Your page session changed. Refresh the page and try again.');
     }
@@ -51,7 +51,7 @@ class ReturnsPortal extends BaseController
         $this->owner();
         $headerBalance=null;
         if(CustomerAccounts::enabled()){
-            try{$headerBalance=(new CustomerAccounts(new ReturnStore()))->headerBalance($this->owner());}catch(RuntimeException){return redirect()->to('/login');}
+            try{$a=new CustomerAccounts(new ReturnStore());$headerBalance=$a->headerBalance($this->owner());if(!(new \App\Libraries\PrivacyConsent($a))->status($a->customer($this->owner())['id'])['active'])return redirect()->to('/account#privacy');}catch(RuntimeException){return redirect()->to('/login');}
         }
         $this->response->setHeader('Cache-Control','no-store, private')->setHeader('X-Frame-Options','DENY')->setHeader('X-Content-Type-Options','nosniff')->setHeader('Referrer-Policy','no-referrer');
         return view('returns_portal',['csrf'=>session()->get('return_csrf'),'customersEnabled'=>CustomerAccounts::enabled(),'customerCsrf'=>session()->get('customer_csrf'),'headerBalance'=>$headerBalance]);
@@ -92,10 +92,10 @@ class ReturnsPortal extends BaseController
                 $requestKey=(string)($data['requestKey']??'');if(!preg_match('/^[a-zA-Z0-9-]{16,80}$/D',$requestKey))throw new RuntimeException('Invalid request identifier.');
                 $billingKey='document:'.$owner.':'.$requestKey;
                 // Reserve and claim a request once. Never replay a potentially chargeable upstream call.
-                $billing->atomic(function()use($billing,$owner,$service,$billingKey,$store,$data){
+                $billing->atomic(function()use($billing,$owner,$service,$billingKey,$store,$data,$credentials,$fields){
                     $billing->confirm($owner,$service,1,(string)($data['confirmation']??''));
                     if($store->query('SELECT id FROM billing_usage WHERE request_key=?',[$billingKey])->fetchColumn())throw new RuntimeException('This request was already submitted. Check your account usage before requesting again.');
-                    $billing->reserve($owner,$service,$billingKey,true);
+                    $billing->reserve($owner,$service,$billingKey,true,['gstin'=>$credentials['gstin'],'period'=>$fields['Period']??$fields['year']??'']);
                 });
             }
             try{$response=(new ReturnGateway())->audited($store,$owner,$this->clientIp())->documentRequest($service,$credentials,$fields);}
@@ -212,7 +212,7 @@ class ReturnsPortal extends BaseController
                 $store->query('INSERT INTO batches(id,owner,request_key,created,scope) VALUES(?,?,?,?,?)',[$batch,$owner,$requestKey,$now,$scope]);
                 $count=0;
                 foreach (ReturnGateway::TYPES as $type) if (in_array($type,$types,true)) foreach ($periods[$type] as $period) {
-                    $jobId=bin2hex(random_bytes(16));if($billing)$billing->reserve($owner,'returns','return:'.$jobId,true);
+                    $jobId=bin2hex(random_bytes(16));if($billing)$billing->reserve($owner,'returns','return:'.$jobId,true,['gstin'=>$connection['gstin'],'return_type'=>$type,'period'=>$period]);
                     $store->query("INSERT INTO jobs(id,batch_id,owner,return_type,gstin,financial_year,period,status,message,created,updated,client_ip) VALUES(?,?,?,?,?,?,?,'queued','Waiting for sequential initiation.',?,?,?)",[$jobId,$batch,$owner,$type,$connection['gstin'],$fy,$period,$now,$now,$this->clientIp()]);$count++;
                 }
                 $store->db->exec('COMMIT');

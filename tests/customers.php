@@ -5,9 +5,10 @@ use App\Libraries\ReturnStore;use App\Libraries\CustomerAccounts as Accounts;
 function check($ok,$message){if(!$ok)throw new RuntimeException($message);echo 'PASS '.$message.PHP_EOL;}
 function rejects($fn,$message){try{$fn();}catch(RuntimeException){check(true,$message);return;}throw new RuntimeException('Expected rejection: '.$message);}
 $mail=[];$s=new ReturnStore();$a=new Accounts($s,function($email,$name,$subject,$body)use(&$mail){$mail[]=$body;});
-check(Accounts::mobile('9876543210')==='+919876543210'&&Accounts::mobile('+919876543210')==='+919876543210','mobile normalization');
-foreach(['5876543210','987654321','98765432101','0987654321','98765 43210','98765abc10']as$v)rejects(fn()=>Accounts::mobile($v),'invalid mobile '.$v);
-$data=['name'=>'Test Customer','company'=>'Example Company','email'=>'Customer@Example.com','mobile'=>'9876543210','password'=>'LongPassword!123','confirm'=>'LongPassword!123'];
+check((int)$s->query('SELECT COUNT(*) FROM customer_migrations WHERE version=5')->fetchColumn()===1,'usage context migration applied once');
+check(Accounts::mobile('9876503214')==='+919876503214'&&Accounts::mobile('+919876503214')==='+919876503214','mobile normalization');
+foreach(['5876543210','987654321','98765032141','0987654321','98765 43210','98765abc10']as$v)rejects(fn()=>Accounts::mobile($v),'invalid mobile '.$v);
+$data=['privacyConsent'=>true,'privacyVersion'=>App\Libraries\PrivacyConsent::VERSION,'name'=>'Test Customer','company'=>'Example Company','email'=>'Customer@Example.com','mobile'=>'9876503214','password'=>'LongPassword!123','confirm'=>'LongPassword!123'];
 $id=$a->register($data,'127.0.0.1');preg_match('/\b([0-9]{6})\b/',$mail[0],$match);$otp=$match[1];
 $r=$s->query('SELECT * FROM registration_attempts WHERE id=?',[$id])->fetch();check(!str_contains($r['verifier'],$otp)&&password_verify(hash_hmac('sha256',$otp,(string)env('GST_ENCRYPTION_KEY','')),$r['verifier']),'OTP is protected, not stored plaintext');
 rejects(fn()=>$a->register($data,'127.0.0.1'),'resend cooldown');
@@ -18,7 +19,7 @@ rejects(fn()=>$a->register($data,'127.0.0.1'),'duplicate email');$other=$data;$o
 check((int)$s->query('SELECT COUNT(*) FROM bonus_awards')->fetchColumn()===1,'one bonus award');
 $q=$a->quote('owner-test','returns');check($q['net']===300&&$q['tax']===54&&$q['gross']===354,'exact 18 percent GST');
 foreach(['challan-monthly'=>354,'challan-yearly'=>4130,'certificate'=>236]as$service=>$gross)check($a->quote('owner-test',$service)['gross']===$gross,'default gross price '.$service);
-$u=$a->reserve('owner-test','returns','job-one');$again=$a->reserve('owner-test','returns','job-one');check($u['id']===$again['id']&&(int)$a->customer('owner-test')['balance']===2646,'idempotent reservation');$a->settle('job-one','released');$a->settle('job-one','released');check((int)$a->customer('owner-test')['balance']===3000,'idempotent reservation reversal');
+$u=$a->reserve('owner-test','returns','job-one',false,['gstin'=>'27ABCDE1234F1Z5','return_type'=>'GSTR-1','period'=>'102026']);check($u['gstin']==='27ABCDE1234F1Z5'&&$u['return_type']==='GSTR-1'&&$u['period']==='102026','usage stores request GSTIN and return period independently of profile billing GSTIN');$again=$a->reserve('owner-test','returns','job-one');check($u['id']===$again['id']&&(int)$a->customer('owner-test')['balance']===2646,'idempotent reservation');$a->settle('job-one','released');$a->settle('job-one','released');check((int)$a->customer('owner-test')['balance']===3000,'idempotent reservation reversal');
 $s->query("UPDATE customer_settings SET value='900' WHERE name='price_returns'");check($a->quote('owner-test','returns')['net']===300,'global defaults do not change existing customer prices');
 $s->query("UPDATE customer_settings SET value='test@upi' WHERE name='upi_id'");$idRecharge=$a->recharge('owner-test','10.00','UTR123456');check((int)$a->customer('owner-test')['balance']===3000,'pending recharge gives no credit');$a->approveRecharge($idRecharge,true,'bank verified','admin');$a->approveRecharge($idRecharge,true,'bank verified','admin');check((int)$a->customer('owner-test')['balance']===4000,'recharge credited exactly once');
 $s->query('UPDATE customers SET balance=0 WHERE id=?',[$c['id']]);rejects(fn()=>$a->reserve('owner-test','returns','no-money'),'insufficient balance enforced');
@@ -46,3 +47,31 @@ foreach(['concurrent-one','concurrent-two']as$key)$children[]=proc_open([PHP_BIN
 $codes=[];foreach($children as$process)$codes[]=proc_close($process);sort($codes);check($codes===[0,2],'concurrent requests cannot overspend the wallet');check((int)$a->customer('owner-active')['balance']===438,'wallet balance remains correct after concurrent spending');unlink($childPath);
 $a->forgot('active@example.com','reset-ip');$last=end($mail);preg_match('/#([a-f0-9]+\.[a-f0-9]+)/',$last,$reset);check(isset($reset[1]),'password reset email generated through test transport');$a->reset($reset[1],'UpdatedPassword123!');rejects(fn()=>$a->customer('owner-active'),'password reset invalidates existing login sessions');rejects(fn()=>$a->reset($reset[1],'UpdatedPassword123!'),'password reset token is single use');rejects(fn()=>$a->login('active@example.com','LongPassword!123','old-password','reset-ip'),'old password no longer works');check($a->login('active@example.com','UpdatedPassword123!','new-password','reset-ip')['mode']==='PREPAID','new password works without account reactivation');
 echo "Customer foundation checks complete. No provider calls made.\n";
+
+foreach(['API Usage & Holds', 'dated'] as $kind){
+ $today=(new DateTimeImmutable('now',new DateTimeZone('Asia/Kolkata')))->format('Y-m-d');
+ $bytes=$kind==='dated'?App\Libraries\AdminReports::build($s,'usage',$today,$today,''):App\Libraries\AdminReports::section($s,$kind,'customer@example.com');
+ $path=WRITEPATH.'usage-context.xlsx';file_put_contents($path,$bytes);$zip=new ZipArchive();check($zip->open($path)===true,'usage context export opens');$xml=$zip->getFromName('xl/worksheets/sheet1.xml');$zip->close();unlink($path);
+ check(str_contains($xml,'27ABCDE1234F1Z5')&&str_contains($xml,'GSTR-1')&&str_contains($xml,'Test Customer')&&str_contains($xml,'customer@example.com'),'usage Excel includes customer identity and actual request GSTIN');
+}
+
+$s->query("UPDATE customers SET mode='PREPAID' WHERE id=?",[$c['id']]);
+$beforeCredit=(int)$s->query('SELECT balance FROM customers WHERE id=?',[$c['id']])->fetchColumn();
+$creditRef='fixture-admin-credit-0001';
+check($a->adminCredit($c['id'],10000,'Authorized support credit',$creditRef,'fixture-admin'),'Admin can grant wallet balance');
+check(!$a->adminCredit($c['id'],10000,'Authorized support credit',$creditRef,'fixture-admin'),'duplicate credit submission is idempotent');
+check((int)$s->query('SELECT balance FROM customers WHERE id=?',[$c['id']])->fetchColumn()===$beforeCredit+10000,'wallet increases exactly once');
+check((int)$s->query("SELECT COUNT(*) FROM customer_ledger WHERE reference=?",['admin-credit:'.$creditRef])->fetchColumn()===1,'Admin credit has one ledger record');
+check((int)$s->query("SELECT COUNT(*) FROM customer_audit WHERE action='admin-wallet-credit' AND subject=?",[$c['id']])->fetchColumn()===1,'Admin credit is audited');
+rejects(fn()=>$a->adminCredit($c['id'],20000,'Changed credit amount',$creditRef,'fixture-admin'),'credit reference cannot be reused with a different amount');
+rejects(fn()=>$a->adminCredit($c['id'],0,'Authorized support credit','fixture-admin-credit-0002','fixture-admin'),'zero credit rejected');
+rejects(fn()=>$a->adminCredit($c['id'],100,'','fixture-admin-credit-0003','fixture-admin'),'credit reason required');
+$s->query("UPDATE customers SET mode='POSTPAID' WHERE id=?",[$c['id']]);
+rejects(fn()=>$a->adminCredit($c['id'],100,'Authorized support credit','fixture-admin-credit-0004','fixture-admin'),'postpaid wallets cannot be credited');
+
+foreach(['6666666666','7777777777','8888888888','9999999999','9876543210','6789012345','98765432101','+919999999999'] as $badMobile)rejects(fn()=>Accounts::mobile($badMobile),'invalid repeated, sequential or oversized mobile rejected');
+foreach(['6815309274','7815309274','8815309274','9815309274'] as $goodMobile)check(Accounts::mobile($goodMobile)==='+91'.$goodMobile,'mobile accepts valid starting digit');
+Accounts::password('a');check(true,'password has no 12-character minimum');
+rejects(fn()=>Accounts::password(''),'empty password rejected');
+$longPassword=str_repeat('a',100).'X';$newHash=Accounts::passwordHash($longPassword);check(Accounts::passwordMatches($longPassword,$newHash)&&!Accounts::passwordMatches(str_repeat('a',100).'Y',$newHash),'long password is hashed without bcrypt truncation');
+$legacyHash=password_hash('oldpass',PASSWORD_DEFAULT);check(Accounts::passwordMatches('oldpass',$legacyHash),'existing password hashes remain compatible');
